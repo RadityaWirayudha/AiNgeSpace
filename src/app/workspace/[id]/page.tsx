@@ -8,6 +8,6 @@ export default function WorkspacePage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = use(params)
-  return <WorkspaceView workspaceName={id} />
+  use(params)
+  return <WorkspaceView />
 }

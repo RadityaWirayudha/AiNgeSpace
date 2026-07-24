@@ -2,7 +2,6 @@
 
 import {
   Plus,
-  Copy,
   X,
 } from "lucide-react"
 import {
@@ -128,6 +127,43 @@ function SplitButton({
   )
 }
 
+function DuplicateButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            onClick={onClick}
+            className={cn(
+              "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
+              "hover:bg-purple/10 group"
+            )}
+          />
+        }
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-zinc-500 group-hover:text-purple transition-colors"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" className="fill-zinc-700 group-hover:fill-purple/20 transition-colors" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" className="fill-zinc-500 group-hover:fill-purple transition-colors" />
+        </svg>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function TerminalToolbar({
   terminalId,
   terminalName,
@@ -188,8 +224,7 @@ export function TerminalToolbar({
           onClick={() => addTerminal(terminalId, "down")}
         />
         <div className="w-px h-3 bg-white/[0.06] mx-0.5" />
-        <ToolbarButton
-          icon={Copy}
+        <DuplicateButton
           label="Duplicate"
           onClick={() => duplicateTerminal(terminalId)}
         />

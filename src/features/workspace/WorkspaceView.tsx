@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Header } from "@/components/Header"
+import { MenuBar } from "@/components/MenuBar"
 import { Explorer } from "@/components/Explorer"
 import { TerminalManager } from "@/features/terminal/TerminalManager"
 import { TerminalProvider } from "@/features/terminal/terminal-store"
@@ -12,13 +12,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-export function WorkspaceView({ workspaceName }: { workspaceName: string }) {
+export function WorkspaceView() {
   const [explorerOpen, setExplorerOpen] = useState(true)
 
   return (
     <TerminalProvider>
       <div className="flex flex-col h-screen bg-background overflow-hidden">
-        <Header workspaceName={workspaceName} />
+        <MenuBar
+          onToggleExplorer={() => setExplorerOpen(!explorerOpen)}
+          explorerOpen={explorerOpen}
+        />
         <div className="flex flex-1 min-h-0">
           {explorerOpen && (
             <div className="w-56 shrink-0 animate-in slide-in-from-left-2 duration-200">
