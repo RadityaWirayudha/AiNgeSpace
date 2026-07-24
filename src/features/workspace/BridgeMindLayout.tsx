@@ -3,20 +3,20 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { BridgeMindSidebar } from "@/components/BridgeMindSidebar"
-import { AgentPane } from "@/components/AgentPane"
+import { Pane } from "@/components/Pane"
+import {
+  PaneTerminalProvider,
+  usePaneTerminalStore,
+  collectTerminals,
+} from "@/features/terminal/pane-terminal-store"
+import { PaneTerminalManager } from "@/features/terminal/PaneTerminalManager"
 
 interface PaneData {
   id: string
   title: string
   status: "running" | "idle" | "warning" | "error"
   progress?: number
-  items?: string[]
-  bulletPoints?: { label: string; value: string }[]
-  warning?: string
-  server?: string
-  controlPanel?: string
   duration?: string
-  autoMode?: boolean
   agentCount?: number
 }
 
@@ -42,23 +42,12 @@ const mockWorkspaces: WorkspaceData[] = [
         id: "pane-1",
         title: "Review project and…",
         status: "idle",
-        items: [
-          "Two things worth flagging:",
-          "1. bridgemind_admin no…",
-          "2. bridgeagent_memory…",
-        ],
-        autoMode: true,
         agentCount: 3,
       },
       {
         id: "pane-2",
         title: "Review project and…",
         status: "idle",
-        items: [
-          "COUPON_PRICE_REFLECTION…",
-          "(main, 2 dirty)",
-        ],
-        autoMode: true,
         agentCount: 2,
       },
     ],
@@ -73,27 +62,13 @@ const mockWorkspaces: WorkspaceData[] = [
         title: "Launch BOM sprint…",
         status: "running",
         progress: 5,
-        items: [
-          "The BOM overlay is up",
-          "and running. Here's…",
-        ],
-        bulletPoints: [
-          { label: "Server", value: "bomb-sprint…" },
-          { label: "Control panel", value: "open…" },
-        ],
         duration: "Cooked for 12m 1s",
-        autoMode: true,
         agentCount: 4,
       },
       {
         id: "pane-4",
         title: "Review project and…",
         status: "idle",
-        items: [
-          "PNG, matching the…",
-          "…",
-        ],
-        autoMode: true,
         agentCount: 2,
       },
     ],
@@ -107,24 +82,13 @@ const mockWorkspaces: WorkspaceData[] = [
         id: "pane-5",
         title: "Refactor auth module…",
         status: "warning",
-        warning: "Deprecation warning: v2 API will be removed",
-        items: [
-          "Migrating 3 endpoints…",
-          "Tests passing: 47/52",
-        ],
         duration: "Cooked for 5m 32s",
-        autoMode: true,
         agentCount: 3,
       },
       {
         id: "pane-6",
         title: "Deploy staging…",
         status: "idle",
-        items: [
-          "Build completed",
-          "Waiting for review…",
-        ],
-        autoMode: true,
         agentCount: 1,
       },
     ],
@@ -139,39 +103,29 @@ const mockWorkspaces: WorkspaceData[] = [
         title: "Generate tests…",
         status: "running",
         progress: 72,
-        items: [
-          "Generating unit tests for",
-          "src/features/auth/…",
-        ],
         duration: "Cooked for 3m 45s",
-        autoMode: true,
         agentCount: 5,
       },
       {
         id: "pane-8",
         title: "Code review…",
         status: "idle",
-        items: [
-          "PR #142 reviewed",
-          "2 suggestions…",
-        ],
-        autoMode: true,
         agentCount: 2,
       },
     ],
   },
 ]
 
-export function BridgeMindLayout({ workspaces: propWorkspaces, className }: BridgeMindLayoutProps) {
+function BridgeMindInner() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("bridgemind-1")
   const [activePaneId, setActivePaneId] = useState<string | null>("pane-3")
 
-  const workspaces = propWorkspaces ?? mockWorkspaces
+  const workspaces = mockWorkspaces
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
 
   return (
-    <div className={cn("flex h-screen bg-bm-bg overflow-hidden", className)}>
+    <div className="flex h-screen bg-bm-bg overflow-hidden">
       <BridgeMindSidebar
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
@@ -191,25 +145,42 @@ export function BridgeMindLayout({ workspaces: propWorkspaces, className }: Brid
               className="min-h-0 min-w-0"
               onClick={() => setActivePaneId(pane.id)}
             >
-              <AgentPane
+              <Pane
                 title={pane.title}
                 active={pane.id === activePaneId}
-                status={pane.status}
                 progress={pane.progress}
-                items={pane.items}
-                bulletPoints={pane.bulletPoints}
-                warning={pane.warning}
-                server={pane.server}
-                controlPanel={pane.controlPanel}
-                duration={pane.duration}
-                autoMode={pane.autoMode}
-                agentCount={pane.agentCount}
                 className="h-full"
-              />
+                footer={
+                  <div className="flex items-center justify-between w-full">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-bm-text-secondary">»</span>
+                      <span>auto mode on</span>
+                      {pane.agentCount !== undefined && pane.agentCount > 0 && (
+                        <span className="text-bm-text-secondary">
+                          · {pane.agentCount} agent{pane.agentCount !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </span>
+                    {pane.duration && <span>{pane.duration}</span>}
+                  </div>
+                }
+              >
+                <div className="w-full h-full">
+                  <PaneTerminalManager paneId={pane.id} />
+                </div>
+              </Pane>
             </div>
           ))}
         </div>
       </div>
     </div>
+  )
+}
+
+export function BridgeMindLayout({ className }: BridgeMindLayoutProps) {
+  return (
+    <PaneTerminalProvider>
+      <BridgeMindInner />
+    </PaneTerminalProvider>
   )
 }

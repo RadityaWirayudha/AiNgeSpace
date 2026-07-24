@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation"
+import { BridgeMindLayout } from "@/features/workspace/BridgeMindLayout"
 
 export default function RootPage() {
-  redirect("/bridgemind")
+  return <BridgeMindLayout />
 }

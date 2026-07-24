@@ -24,7 +24,7 @@ interface AgentPaneProps {
 
 function StatusDot({ status }: { status: AgentPaneProps["status"] }) {
   const colors = {
-    running: "bg-bm-border-active",
+    running: "bg-purple",
     idle: "bg-bm-text-secondary",
     warning: "bg-bm-warning",
     error: "bg-destructive",

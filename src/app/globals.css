@@ -330,7 +330,7 @@
 }
 
 .bm-pane-active {
-  border-color: var(--bm-border-active);
+  border-color: #9333ea;
   border-width: 2px;
 }
 
@@ -424,8 +424,8 @@
 }
 
 .bm-progress-active {
-  background: var(--bm-border-active);
-  color: #0E0E10;
+  background: #9333ea;
+  color: #fafafa;
 }
 
 .bm-link {
