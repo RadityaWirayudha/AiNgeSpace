@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { BridgeMindSidebar } from "@/components/BridgeMindSidebar"
 import { Pane } from "@/components/Pane"
@@ -53,47 +53,6 @@ const mockWorkspaces: WorkspaceData[] = [
     ],
   },
   {
-    id: "bridgemind-1",
-    name: "BridgeMind 8",
-    count: 8,
-    panes: [
-      {
-        id: "pane-3",
-        title: "Launch BOM sprint…",
-        status: "running",
-        progress: 5,
-        duration: "Cooked for 12m 1s",
-        agentCount: 4,
-      },
-      {
-        id: "pane-4",
-        title: "Review project and…",
-        status: "idle",
-        agentCount: 2,
-      },
-    ],
-  },
-  {
-    id: "bridgemind-2",
-    name: "BridgeMind 7",
-    count: 7,
-    panes: [
-      {
-        id: "pane-5",
-        title: "Refactor auth module…",
-        status: "warning",
-        duration: "Cooked for 5m 32s",
-        agentCount: 3,
-      },
-      {
-        id: "pane-6",
-        title: "Deploy staging…",
-        status: "idle",
-        agentCount: 1,
-      },
-    ],
-  },
-  {
     id: "gpt-1",
     name: "GPT 5.5",
     count: 6,
@@ -117,24 +76,42 @@ const mockWorkspaces: WorkspaceData[] = [
 ]
 
 function BridgeMindInner() {
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState("bridgemind-1")
-  const [activePaneId, setActivePaneId] = useState<string | null>("pane-3")
+  const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(mockWorkspaces)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("gpt-1")
+  const [activePaneId, setActivePaneId] = useState<string | null>("pane-7")
+  const wsCounterRef = useRef(0)
 
-  const workspaces = mockWorkspaces
+  const createWorkspace = () => {
+    wsCounterRef.current++
+    const newWs: WorkspaceData = {
+      id: `ws-${Date.now()}`,
+      name: `Workspace ${wsCounterRef.current}`,
+      count: 0,
+      panes: [],
+    }
+    setWorkspaces((prev) => [...prev, newWs])
+    setActiveWorkspaceId(newWs.id)
+    setActivePaneId(null)
+  }
+
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
 
   return (
     <div className="flex h-screen bg-bm-bg overflow-hidden">
       <BridgeMindSidebar
-        workspaces={workspaces}
+        workspaces={workspaces.map((ws) => ({
+          ...ws,
+          panes: ws.panes.map((p) => ({ title: p.title, status: p.status })),
+        }))}
         activeWorkspaceId={activeWorkspaceId}
         onSelect={(id) => {
           setActiveWorkspaceId(id)
           const ws = workspaces.find((w) => w.id === id)
           setActivePaneId(ws?.panes[0]?.id ?? null)
         }}
-        className="w-44 shrink-0"
+        onCreateWorkspace={createWorkspace}
+        className="w-52 shrink-0"
       />
 
       <div className="flex-1 flex flex-col min-w-0">
