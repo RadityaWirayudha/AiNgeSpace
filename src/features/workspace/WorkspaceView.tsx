@@ -12,11 +12,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-export function WorkspaceView() {
+export function WorkspaceView({ initialTerminalCount = 1 }: { initialTerminalCount?: number }) {
   const [explorerOpen, setExplorerOpen] = useState(true)
 
   return (
-    <TerminalProvider>
+    <TerminalProvider initialCount={initialTerminalCount}>
       <div className="flex flex-col h-screen bg-background overflow-hidden">
         <MenuBar
           onToggleExplorer={() => setExplorerOpen(!explorerOpen)}

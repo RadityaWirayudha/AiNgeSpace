@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Terminal,
   GitBranch,
@@ -58,6 +59,7 @@ const statusColors: Record<string, { dot: string; label: string }> = {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
@@ -160,7 +162,7 @@ export default function DashboardPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onCreated={(id) => {
-          window.location.href = `/workspace/${id}`
+          router.push(`/workspace/${id}`)
         }}
       />
     </div>

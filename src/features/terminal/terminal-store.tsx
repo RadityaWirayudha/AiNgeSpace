@@ -93,10 +93,13 @@ function terminalReducer(state: TerminalState, action: TerminalAction): Terminal
   }
 }
 
-const initialId = nextId()
-const initialState: TerminalState = {
-  terminals: [{ id: initialId, name: "Terminal A" }],
-  activeTerminalId: initialId,
+function makeInitialState(count: number): TerminalState {
+  const firstId = nextId()
+  const terminals: TerminalTab[] = [{ id: firstId, name: "Terminal A" }]
+  for (let i = 1; i < count; i++) {
+    terminals.push({ id: nextId(), name: generateName(i) })
+  }
+  return { terminals, activeTerminalId: firstId }
 }
 
 interface TerminalContextValue {
@@ -110,8 +113,14 @@ interface TerminalContextValue {
 
 const TerminalContext = createContext<TerminalContextValue | null>(null)
 
-export function TerminalProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(terminalReducer, initialState)
+export function TerminalProvider({
+  children,
+  initialCount = 1,
+}: {
+  children: ReactNode
+  initialCount?: number
+}) {
+  const [state, dispatch] = useReducer(terminalReducer, makeInitialState(initialCount))
 
   const addTerminal = (afterId?: string, direction?: SplitDirection) => {
     const id = nextId()

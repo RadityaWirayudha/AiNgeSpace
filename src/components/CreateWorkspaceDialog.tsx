@@ -516,22 +516,41 @@ export function CreateWorkspaceDialog({
   const handleLaunch = async () => {
     setSubmitting(true)
     try {
-      const res = await fetch("/api/workspaces", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: workspaceName.trim(),
-          githubRepo: repoUrl.trim(),
-          githubBranch: branch.trim() || "main",
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        onCreated?.(data.id)
-        handleClose()
+      const selectedLayout = LAYOUTS.find((l) => l.id === layoutId)
+      const terminalCount = selectedLayout?.count ?? 1
+
+      let workspaceId: string | null = null
+
+      // Coba buat workspace lewat API
+      try {
+        const res = await fetch("/api/workspaces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: workspaceName.trim(),
+            githubRepo: repoUrl.trim(),
+            githubBranch: branch.trim() || "main",
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          workspaceId = data.id
+        }
+      } catch {
+        // API gagal, lanjut dengan ID client-side
       }
-    } catch {
-      // diam saja — user bisa coba ulang
+
+      // Kalau API gagal, buat ID sendiri
+      if (!workspaceId) {
+        workspaceId = `ws-${Date.now()}`
+      }
+
+      // Simpan config ke localStorage dan navigasi
+      const layoutPayload = { terminalCount, layoutId, agents }
+      localStorage.setItem("aingespace:pending-layout", JSON.stringify(layoutPayload))
+
+      onCreated?.(workspaceId)
+      handleClose()
     } finally {
       setSubmitting(false)
     }
