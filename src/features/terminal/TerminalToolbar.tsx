@@ -35,7 +35,7 @@ function ToolbarButton({
       <TooltipTrigger
         render={
           <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
               "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
               "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06]",
@@ -64,15 +64,15 @@ function SplitButton({
   onClick: () => void
 }) {
   const isVertical = dir === "left" || dir === "right"
-  const currentIsLeft = dir === "left"
-  const currentIsTop = dir === "up"
+  const isTargetLeft = dir === "left"
+  const isTargetTop = dir === "up"
 
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
               "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
               "hover:bg-purple/10 group"
@@ -85,17 +85,17 @@ function SplitButton({
             <div
               className={cn(
                 "flex-1 rounded-[1px] transition-colors",
-                currentIsLeft
+                isTargetLeft
                   ? "bg-zinc-500 group-hover:bg-purple"
-                  : "bg-zinc-700 group-hover:bg-purple/40"
+                  : "bg-zinc-700 group-hover:bg-zinc-600"
               )}
             />
             <div
               className={cn(
                 "flex-1 rounded-[1px] transition-colors",
-                !currentIsLeft
+                !isTargetLeft
                   ? "bg-zinc-500 group-hover:bg-purple"
-                  : "bg-zinc-700 group-hover:bg-purple/40"
+                  : "bg-zinc-700 group-hover:bg-zinc-600"
               )}
             />
           </div>
@@ -104,17 +104,17 @@ function SplitButton({
             <div
               className={cn(
                 "flex-1 rounded-[1px] transition-colors",
-                currentIsTop
+                isTargetTop
                   ? "bg-zinc-500 group-hover:bg-purple"
-                  : "bg-zinc-700 group-hover:bg-purple/40"
+                  : "bg-zinc-700 group-hover:bg-zinc-600"
               )}
             />
             <div
               className={cn(
                 "flex-1 rounded-[1px] transition-colors",
-                !currentIsTop
+                !isTargetTop
                   ? "bg-zinc-500 group-hover:bg-purple"
-                  : "bg-zinc-700 group-hover:bg-purple/40"
+                  : "bg-zinc-700 group-hover:bg-zinc-600"
               )}
             />
           </div>
@@ -133,7 +133,7 @@ function DuplicateButton({ label, onClick }: { label: string; onClick: () => voi
       <TooltipTrigger
         render={
           <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
               "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
               "hover:bg-purple/10 group"

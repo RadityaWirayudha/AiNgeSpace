@@ -50,7 +50,7 @@ function ToolbarBtn({
       <TooltipTrigger
         render={
           <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
               "inline-flex items-center justify-center size-5 rounded-sm transition-colors outline-none",
               "text-bm-text-secondary hover:text-bm-text hover:bg-white/[0.06]",
@@ -127,7 +127,7 @@ function SplitBtn({
       <TooltipTrigger
         render={
           <button
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
               "inline-flex items-center justify-center size-5 rounded-sm transition-colors outline-none",
               "text-bm-text-secondary hover:text-bm-text hover:bg-white/[0.06]"

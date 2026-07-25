@@ -1,14 +1,10 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { cn } from "@/lib/utils"
 import { BridgeMindSidebar } from "@/components/BridgeMindSidebar"
 import { Pane } from "@/components/Pane"
-import {
-  PaneTerminalProvider,
-  usePaneTerminalStore,
-  collectTerminals,
-} from "@/features/terminal/pane-terminal-store"
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog"
+import { PaneTerminalProvider } from "@/features/terminal/pane-terminal-store"
 import { PaneTerminalManager } from "@/features/terminal/PaneTerminalManager"
 
 interface PaneData {
@@ -79,12 +75,17 @@ function BridgeMindInner() {
   const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(mockWorkspaces)
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("gpt-1")
   const [activePaneId, setActivePaneId] = useState<string | null>("pane-7")
+  const [dialogOpen, setDialogOpen] = useState(false)
   const wsCounterRef = useRef(0)
 
   const createWorkspace = () => {
+    setDialogOpen(true)
+  }
+
+  const handleWorkspaceCreated = (workspaceId: string) => {
     wsCounterRef.current++
     const newWs: WorkspaceData = {
-      id: `ws-${Date.now()}`,
+      id: workspaceId,
       name: `Workspace ${wsCounterRef.current}`,
       count: 0,
       panes: [],
@@ -150,6 +151,12 @@ function BridgeMindInner() {
           ))}
         </div>
       </div>
+
+      <CreateWorkspaceDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onCreated={handleWorkspaceCreated}
+      />
     </div>
   )
 }

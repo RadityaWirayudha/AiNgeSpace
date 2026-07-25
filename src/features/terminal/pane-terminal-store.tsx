@@ -194,7 +194,7 @@ function paneReducer(
       return {
         ...state,
         trees: { ...state.trees, [paneId]: newTree },
-        activeTerminalId: terminalId,
+        activeTerminalId: newTermId,
       }
     }
 

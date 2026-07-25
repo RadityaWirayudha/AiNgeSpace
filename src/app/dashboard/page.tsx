@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
 import {
   Terminal,
@@ -11,6 +14,7 @@ import {
   HardDrive,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog"
 
 const mockWorkspaces = [
   {
@@ -54,6 +58,8 @@ const statusColors: Record<string, { dot: string; label: string }> = {
 }
 
 export default function DashboardPage() {
+  const [dialogOpen, setDialogOpen] = useState(false)
+
   return (
     <div className="flex flex-col min-h-screen relative">
       <div className="absolute inset-0 grid-bg pointer-events-none" />
@@ -71,7 +77,11 @@ export default function DashboardPage() {
           <div className="w-px h-4 bg-white/[0.06]" />
           <span className="text-xs text-zinc-500">Dashboard</span>
         </div>
-        <Button size="sm" className="gap-1.5 bg-purple hover:bg-purple-dark text-white text-xs font-medium glow-purple-sm rounded-lg">
+        <Button
+          size="sm"
+          onClick={() => setDialogOpen(true)}
+          className="gap-1.5 bg-purple hover:bg-purple-dark text-white text-xs font-medium glow-purple-sm rounded-lg"
+        >
           <Plus className="size-3.5" />
           New Workspace
         </Button>
@@ -145,6 +155,14 @@ export default function DashboardPage() {
           ))}
         </div>
       </main>
+
+      <CreateWorkspaceDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onCreated={(id) => {
+          window.location.href = `/workspace/${id}`
+        }}
+      />
     </div>
   )
 }
