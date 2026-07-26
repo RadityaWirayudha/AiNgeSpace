@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef } from "react"
 import { Plus, LayoutGrid } from "lucide-react"
 import { BridgeMindSidebar } from "@/components/BridgeMindSidebar"
 import { Pane } from "@/components/Pane"
@@ -65,17 +65,29 @@ function gridFor(count: number): string {
   return "grid-cols-2 grid-rows-4 lg:grid-cols-4 lg:grid-rows-2"
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  /** With every workspace closed there is nothing to add a pane *to*, so the
+   *  call to action has to change with it. */
+  variant = "pane",
+}: {
+  onCreate: () => void
+  variant?: "pane" | "workspace"
+}) {
+  const isPane = variant === "pane"
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
       <div className="size-10 rounded-md border border-bm-border bg-bm-pane flex items-center justify-center">
         <LayoutGrid className="size-4 text-bm-text-dim" />
       </div>
       <div>
-        <p className="text-[13px] text-bm-text font-medium">No panes yet</p>
+        <p className="text-[13px] text-bm-text font-medium">
+          {isPane ? "No panes yet" : "No workspaces"}
+        </p>
         <p className="text-[11px] text-bm-text-secondary mt-1 max-w-xs">
-          This workspace is empty. Add a pane to start a terminal and attach
-          agents to it.
+          {isPane
+            ? "This workspace is empty. Add a pane to start a terminal and attach agents to it."
+            : "Create a workspace to pick a repository, a pane layout, and the agents that run in it."}
         </p>
       </div>
       <button
@@ -84,7 +96,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         className="inline-flex items-center gap-1.5 h-7 px-3 rounded-sm border border-bm-border bg-bm-pane-header text-[11px] text-bm-text hover:border-bm-live/40 hover:text-bm-text transition-colors"
       >
         <Plus className="size-3" />
-        Add pane
+        {isPane ? "Add pane" : "New workspace"}
       </button>
     </div>
   )
@@ -96,6 +108,9 @@ function BridgeMindInner() {
   const [activePaneId, setActivePaneId] = useState<string | null>("pane-7")
   const [expandedPaneId, setExpandedPaneId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Monotonic counter instead of Date.now(): two panes added in the same
+  // millisecond used to collide on the same React key.
+  const paneSeq = useRef(0)
 
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
@@ -119,38 +134,92 @@ function BridgeMindInner() {
     setExpandedPaneId(null)
   }, [])
 
-  const addPane = useCallback(() => {
+  /** Adding a pane works on any workspace, so the sidebar's per-row `+` can
+   *  target a workspace without first making it active. */
+  const addPaneTo = useCallback((workspaceId: string) => {
+    paneSeq.current += 1
+    const paneId = `${workspaceId}-p${paneSeq.current}`
     setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws
-        const n = ws.panes.length + 1
-        const pane: PaneData = {
-          id: `${ws.id}-pane-${Date.now()}`,
-          title: `Pane ${n}`,
-          status: "idle",
-          agentCount: 0,
-        }
-        setActivePaneId(pane.id)
-        return { ...ws, panes: [...ws.panes, pane] }
-      })
-    )
-  }, [activeWorkspaceId])
-
-  const closePane = useCallback(
-    (paneId: string) => {
-      setWorkspaces((prev) =>
-        prev.map((ws) =>
-          ws.id === activeWorkspaceId
-            ? { ...ws, panes: ws.panes.filter((p) => p.id !== paneId) }
-            : ws
-        )
+      prev.map((ws) =>
+        ws.id === workspaceId
+          ? {
+              ...ws,
+              panes: [
+                ...ws.panes,
+                {
+                  id: paneId,
+                  title: `Pane ${ws.panes.length + 1}`,
+                  status: "idle",
+                  agentCount: 0,
+                },
+              ],
+            }
+          : ws
       )
-      // A closed pane must not stay expanded or keep selection.
-      setExpandedPaneId((cur) => (cur === paneId ? null : cur))
-      setActivePaneId((cur) => (cur === paneId ? null : cur))
-    },
-    [activeWorkspaceId]
+    )
+    // Selection is state, not a side effect of the updater — setting it inside
+    // the map callback fired twice under StrictMode.
+    setActiveWorkspaceId(workspaceId)
+    setActivePaneId(paneId)
+    setExpandedPaneId(null)
+  }, [])
+
+  const addPane = useCallback(
+    () => addPaneTo(activeWorkspaceId),
+    [addPaneTo, activeWorkspaceId]
   )
+
+  const closePane = useCallback((workspaceId: string, paneId: string) => {
+    setWorkspaces((prev) =>
+      prev.map((ws) =>
+        ws.id === workspaceId
+          ? { ...ws, panes: ws.panes.filter((p) => p.id !== paneId) }
+          : ws
+      )
+    )
+    // A closed pane must not stay expanded or keep selection.
+    setExpandedPaneId((cur) => (cur === paneId ? null : cur))
+    setActivePaneId((cur) => (cur === paneId ? null : cur))
+  }, [])
+
+  const renameWorkspace = useCallback((workspaceId: string, name: string) => {
+    setWorkspaces((prev) =>
+      prev.map((ws) => (ws.id === workspaceId ? { ...ws, name } : ws))
+    )
+  }, [])
+
+  const deleteWorkspace = useCallback(
+    (workspaceId: string) => {
+      const index = workspaces.findIndex((ws) => ws.id === workspaceId)
+      if (index < 0) return
+      const next = workspaces.filter((ws) => ws.id !== workspaceId)
+      setWorkspaces(next)
+      // Closing the active workspace has to hand focus to a survivor, or the
+      // grid renders empty with no obvious way back.
+      if (activeWorkspaceId === workspaceId) {
+        const fallback = next[Math.min(index, next.length - 1)]
+        setActiveWorkspaceId(fallback?.id ?? "")
+        setActivePaneId(fallback?.panes[0]?.id ?? null)
+        setExpandedPaneId(null)
+      }
+    },
+    [workspaces, activeWorkspaceId]
+  )
+
+  /** The sidebar hands back the full id list in its new order; ids it does not
+   *  know about (a workspace created mid-drag) keep their relative position at
+   *  the end rather than being dropped. */
+  const reorderWorkspaces = useCallback((orderedIds: string[]) => {
+    setWorkspaces((prev) => {
+      const byId = new Map(prev.map((ws) => [ws.id, ws]))
+      const next = orderedIds
+        .map((id) => byId.get(id))
+        .filter((ws): ws is WorkspaceData => ws !== undefined)
+      const seen = new Set(next.map((ws) => ws.id))
+      for (const ws of prev) if (!seen.has(ws.id)) next.push(ws)
+      return next
+    })
+  }, [])
 
   const togglePin = useCallback(
     (paneId: string) => {
@@ -209,11 +278,20 @@ function BridgeMindInner() {
           setExpandedPaneId(null)
         }}
         onCreateWorkspace={() => setDialogOpen(true)}
-        className="w-56 shrink-0"
+        onAddPane={addPaneTo}
+        onClosePane={closePane}
+        onRenameWorkspace={renameWorkspace}
+        onDeleteWorkspace={deleteWorkspace}
+        onReorderWorkspaces={reorderWorkspaces}
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {panes.length === 0 ? (
+        {workspaces.length === 0 ? (
+          <EmptyState
+            variant="workspace"
+            onCreate={() => setDialogOpen(true)}
+          />
+        ) : panes.length === 0 ? (
           <EmptyState onCreate={addPane} />
         ) : (
           <div
@@ -237,7 +315,7 @@ function BridgeMindInner() {
                   setExpandedPaneId((cur) => (cur === pane.id ? null : pane.id))
                 }
                 onPin={() => togglePin(pane.id)}
-                onClose={() => closePane(pane.id)}
+                onClose={() => closePane(activeWorkspaceId, pane.id)}
                 footer={
                   <div className="flex items-center justify-between w-full gap-2">
                     <span className="flex items-center gap-1.5 min-w-0">

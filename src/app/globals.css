@@ -195,6 +195,164 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   SIDEBAR
+-------------------------------------------------------------------*/
+
+/* Width animates on collapse/expand but never while a pointer is dragging the
+   edge — a 160ms ease there reads as lag, not polish. */
+.bm-sb {
+  transition: width 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bm-sb[data-resizing="1"] {
+  transition: none;
+}
+
+/* Rows paint solid surfaces rather than translucent overlays. Two reasons: a
+   sticky parent row cannot let its pane list show through, and the floating row
+   actions can then simply `background: inherit` to mask the label they cover. */
+:root {
+  --bm-row-hover: #18181b;
+  --bm-row-active: #202024;
+  --bm-row-guide: #26262b;
+}
+
+.bm-row {
+  background: transparent;
+  transition: background-color 0.1s ease;
+}
+
+/* Declared before the state rules so hover and selection still win. */
+.bm-row-sticky {
+  background: var(--bm-bg);
+}
+
+.bm-row:hover,
+.bm-row:focus-within {
+  background: var(--bm-row-hover);
+}
+
+.bm-row-active,
+.bm-row-active:hover {
+  background: var(--bm-row-active);
+}
+
+.bm-row-actions {
+  background: inherit;
+}
+
+/* The guide runs the full height of a workspace's pane list, one continuous
+   hairline descending from the parent's chevron. It paints above the row
+   surfaces so a hovered child does not punch a hole in the branch. */
+.bm-tree-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 1px;
+  background: var(--bm-row-guide);
+}
+
+/* Idle is the common case, so it reads as an outline and only real activity
+   spends ink. Running keeps the pulse from .bm-dot-live. */
+.bm-glyph {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+
+.bm-glyph-idle {
+  box-shadow: inset 0 0 0 1px var(--bm-text-dim);
+}
+
+.bm-glyph-running {
+  background: var(--bm-live);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--bm-live) 16%, transparent);
+}
+
+.bm-glyph-warning {
+  background: var(--bm-warning);
+}
+
+.bm-glyph-error {
+  background: var(--destructive);
+}
+
+/* Section label sitting on a hairline that runs to the panel edge, so the
+   header needs no border of its own. */
+.bm-rule {
+  height: 1px;
+  background: var(--bm-border);
+}
+
+/* Segments of the activity meter. Each one is a plain div sized in percent;
+   the transition keeps a pane going idle from snapping the bar. */
+.bm-sb-seg {
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The drag target is 6px wide for the pointer, but only a 1px line ever
+   paints, so the hairline grid of the layout is preserved. */
+.bm-sb-resize {
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.bm-sb-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.bm-sb-resize:hover::after,
+.bm-sb-resize:focus-visible::after,
+.bm-sb-resize-active::after {
+  background: var(--bm-link);
+}
+
+.bm-sb-resize:focus-visible {
+  outline: none;
+}
+
+/* Row actions float over the end of a long workspace name. The gradient is
+   mixed from the app background so the label fades out behind the icons
+   instead of colliding with them, in either hover state. */
+.bm-sb-actions {
+  padding-left: 12px;
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, #ffffff 6%, var(--bm-bg)) 0%,
+    color-mix(in srgb, #ffffff 6%, var(--bm-bg)) 72%,
+    transparent 100%
+  );
+}
+
+/* Search matches: readable without introducing a fourth accent colour. */
+.bm-mark {
+  background: color-mix(in srgb, var(--bm-link) 22%, transparent);
+  color: var(--bm-text);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-sb,
+  .bm-sb-seg,
+  .bm-sb-resize,
+  .bm-sb-resize::after {
+    transition: none;
+  }
+}
+
 .xterm {
   padding: 6px 8px;
 }
