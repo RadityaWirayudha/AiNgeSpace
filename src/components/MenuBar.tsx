@@ -56,8 +56,16 @@ export function MenuBar({ onToggleExplorer, explorerOpen }: MenuBarProps) {
         setOpenMenu(null)
       }
     }
+    // An open menu covered the app with no keyboard way out.
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenMenu(null)
+    }
     document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
   }, [])
 
   const menus: MenuGroup[] = [
@@ -146,43 +154,51 @@ export function MenuBar({ onToggleExplorer, explorerOpen }: MenuBarProps) {
       {menus.map((menu) => (
         <div key={menu.label} className="relative">
           <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={openMenu === menu.label}
             className={cn(
-              "px-2 py-0.5 text-[11px] text-zinc-400 rounded-sm transition-colors outline-none",
+              "px-2 py-0.5 text-[11px] rounded-sm transition-colors",
               openMenu === menu.label
                 ? "bg-white/[0.08] text-zinc-200"
-                : "hover:bg-white/[0.05] hover:text-zinc-200"
+                : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
             )}
             onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}
+            // Only track the pointer once a menu is already open, so merely
+            // sweeping across the bar doesn't pop menus open.
             onMouseEnter={() => openMenu && setOpenMenu(menu.label)}
           >
             {menu.label}
           </button>
 
           {openMenu === menu.label && (
-            <div className="absolute top-full left-0 mt-0.5 w-56 py-1 rounded-lg border border-white/[0.08] bg-[#0c0c0f] shadow-2xl shadow-black/60 backdrop-blur-xl z-50">
+            <div
+              role="menu"
+              aria-label={menu.label}
+              className="absolute top-full left-0 mt-0.5 w-56 py-1 rounded-lg border border-white/[0.08] bg-[#0c0c0f] shadow-2xl shadow-black/60 z-50"
+            >
               {menu.items.map((item, i) =>
                 item.separator ? (
-                  <div key={i} className="my-1 h-px bg-white/[0.06]" />
+                  <div key={i} role="separator" className="my-1 h-px bg-white/[0.06]" />
                 ) : (
                   <button
                     key={i}
+                    type="button"
+                    role="menuitem"
                     className={cn(
-                      "flex items-center gap-2 w-full px-3 py-1 text-[11px] text-left transition-colors outline-none",
+                      "flex items-center gap-2 w-full px-3 py-1 text-[11px] text-left transition-colors",
                       item.disabled
-                        ? "text-zinc-600 cursor-default"
+                        ? "text-zinc-600 cursor-not-allowed"
                         : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
                     )}
                     onClick={() => {
-                      if (!item.disabled) {
-                        item.action?.()
-                        setOpenMenu(null)
-                      }
+                      if (item.disabled) return
+                      item.action?.()
+                      setOpenMenu(null)
                     }}
                     disabled={item.disabled}
                   >
-                    {item.icon && (
-                      <item.icon className="size-3.5 shrink-0" />
-                    )}
+                    {item.icon && <item.icon className="size-3.5 shrink-0" />}
                     <span className="flex-1">{item.label}</span>
                     {item.shortcut && (
                       <span className="text-zinc-600 text-[10px] font-mono">

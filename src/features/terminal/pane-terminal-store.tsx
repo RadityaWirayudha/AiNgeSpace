@@ -5,6 +5,7 @@ import {
   useContext,
   useReducer,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react"
 
@@ -26,13 +27,26 @@ export type PaneTerminalNode = TerminalLeaf | TerminalSplit
 
 interface PaneTreeState {
   trees: Record<string, PaneTerminalNode>
+  /** Per pane: terminal temporarily filling the pane. Purely a view flag. */
+  maximized: Record<string, string | null>
+  /** Per pane: how many terminals have ever existed, for stable naming. */
+  nameSeq: Record<string, number>
   activeTerminalId: string | null
 }
 
 type PaneTreeAction =
-  | { type: "SPLIT"; payload: { paneId: string; terminalId: string; direction: "horizontal" | "vertical" } }
+  | {
+      type: "SPLIT"
+      payload: {
+        paneId: string
+        terminalId: string
+        direction: "horizontal" | "vertical"
+      }
+    }
   | { type: "CLOSE"; payload: { paneId: string; terminalId: string } }
-  | { type: "EXPAND"; payload: { paneId: string; terminalId: string } }
+  | { type: "TOGGLE_MAXIMIZE"; payload: { paneId: string; terminalId: string } }
+  | { type: "RENAME"; payload: { paneId: string; terminalId: string; name: string } }
+  | { type: "DUPLICATE"; payload: { paneId: string; terminalId: string } }
   | { type: "SET_ACTIVE"; payload: { terminalId: string } }
   | { type: "INIT_PANE"; payload: { paneId: string; terminalId: string; name: string } }
 
@@ -46,27 +60,28 @@ function nextNodeId() {
   return `node-${++nodeCounter}`
 }
 
-function findLeaf(node: PaneTerminalNode, terminalId: string): TerminalLeaf | null {
-  if (node.type === "leaf" && node.terminalId === terminalId) return node
-  if (node.type === "split") {
-    for (const child of node.children) {
-      const found = findLeaf(child, terminalId)
-      if (found) return found
-    }
-  }
-  return null
+/** "Terminal A".."Terminal Z", then "Terminal AA" — never runs out. */
+function terminalName(seq: number): string {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  let n = seq
+  let out = ""
+  do {
+    out = letters[n % 26] + out
+    n = Math.floor(n / 26) - 1
+  } while (n >= 0)
+  return `Terminal ${out}`
 }
 
-function findParent(
+function findLeaf(
   node: PaneTerminalNode,
   terminalId: string
-): TerminalSplit | null {
-  if (node.type === "split") {
-    for (const child of node.children) {
-      if (child.type === "leaf" && child.terminalId === terminalId) return node
-      const found = findParent(child, terminalId)
-      if (found) return found
-    }
+): TerminalLeaf | null {
+  if (node.type === "leaf") {
+    return node.terminalId === terminalId ? node : null
+  }
+  for (const child of node.children) {
+    const found = findLeaf(child, terminalId)
+    if (found) return found
   }
   return null
 }
@@ -76,7 +91,9 @@ function countLeaves(node: PaneTerminalNode): number {
   return node.children.reduce((sum, child) => sum + countLeaves(child), 0)
 }
 
-function collectTerminals(node: PaneTerminalNode): { id: string; name: string }[] {
+function collectTerminals(
+  node: PaneTerminalNode
+): { id: string; name: string }[] {
   if (node.type === "leaf") return [{ id: node.terminalId, name: node.name }]
   return node.children.flatMap(collectTerminals)
 }
@@ -88,7 +105,8 @@ function splitLeaf(
   newTerminalId: string,
   newName: string
 ): PaneTerminalNode {
-  if (node.type === "leaf" && node.terminalId === targetTerminalId) {
+  if (node.type === "leaf") {
+    if (node.terminalId !== targetTerminalId) return node
     const newLeaf: TerminalLeaf = {
       type: "leaf",
       id: nextNodeId(),
@@ -102,62 +120,43 @@ function splitLeaf(
       children: [node, newLeaf],
     }
   }
-  if (node.type === "split") {
-    return {
-      ...node,
-      children: node.children.map((child) =>
-        splitLeaf(child, targetTerminalId, direction, newTerminalId, newName)
-      ),
-    }
+  return {
+    ...node,
+    children: node.children.map((child) =>
+      splitLeaf(child, targetTerminalId, direction, newTerminalId, newName)
+    ),
   }
-  return node
 }
 
 function removeTerminal(
   node: PaneTerminalNode,
   terminalId: string
 ): PaneTerminalNode | null {
-  if (node.type === "leaf" && node.terminalId === terminalId) return null
-  if (node.type === "split") {
-    const newChildren = node.children
-      .map((child) => removeTerminal(child, terminalId))
-      .filter((c): c is PaneTerminalNode => c !== null)
-
-    if (newChildren.length === 0) return null
-    if (newChildren.length === 1) return newChildren[0]
-    return { ...node, children: newChildren }
+  if (node.type === "leaf") {
+    return node.terminalId === terminalId ? null : node
   }
-  return node
+  const newChildren = node.children
+    .map((child) => removeTerminal(child, terminalId))
+    .filter((c): c is PaneTerminalNode => c !== null)
+
+  if (newChildren.length === 0) return null
+  // Collapse a split that has been reduced to a single child.
+  if (newChildren.length === 1) return newChildren[0]
+  return { ...node, children: newChildren }
 }
 
-function removeExpanded(
+function renameLeaf(
   node: PaneTerminalNode,
-  excludeTerminalId: string
-): PaneTerminalNode | null {
-  if (node.type === "leaf" && node.terminalId !== excludeTerminalId) return node
-  if (node.type === "leaf") return node
-  if (node.type === "split") {
-    const newChildren = node.children
-      .map((child) => removeExpanded(child, excludeTerminalId))
-      .filter((c): c is PaneTerminalNode => c !== null)
-    if (newChildren.length === 0) return null
-    if (newChildren.length === 1) return newChildren[0]
-    return { ...node, children: newChildren }
-  }
-  return node
-}
-
-function expandTerminal(
-  node: PaneTerminalNode,
-  targetTerminalId: string
+  terminalId: string,
+  name: string
 ): PaneTerminalNode {
-  if (node.type === "leaf") return node
-  if (node.type === "split") {
-    const target = findLeaf(node, targetTerminalId)
-    if (!target) return node
-    return target
+  if (node.type === "leaf") {
+    return node.terminalId === terminalId ? { ...node, name } : node
   }
-  return node
+  return {
+    ...node,
+    children: node.children.map((child) => renameLeaf(child, terminalId, name)),
+  }
 }
 
 function paneReducer(
@@ -177,7 +176,11 @@ function paneReducer(
       return {
         ...state,
         trees: { ...state.trees, [paneId]: leaf },
-        activeTerminalId: terminalId,
+        maximized: { ...state.maximized, [paneId]: null },
+        nameSeq: { ...state.nameSeq, [paneId]: 1 },
+        // Only claim focus if nothing else holds it, so mounting a second
+        // pane cannot steal the caret out of the terminal being typed in.
+        activeTerminalId: state.activeTerminalId ?? terminalId,
       }
     }
 
@@ -187,13 +190,47 @@ function paneReducer(
       if (!tree) return state
 
       const newTermId = nextTermId()
-      const allTerminals = collectTerminals(tree)
-      const newName = `Terminal ${String.fromCharCode(65 + allTerminals.length)}`
+      const seq = state.nameSeq[paneId] ?? countLeaves(tree)
+      const newTree = splitLeaf(
+        tree,
+        terminalId,
+        direction,
+        newTermId,
+        terminalName(seq)
+      )
 
-      const newTree = splitLeaf(tree, terminalId, direction, newTermId, newName)
       return {
         ...state,
         trees: { ...state.trees, [paneId]: newTree },
+        // A split must reveal the new terminal, so drop any maximize.
+        maximized: { ...state.maximized, [paneId]: null },
+        nameSeq: { ...state.nameSeq, [paneId]: seq + 1 },
+        activeTerminalId: newTermId,
+      }
+    }
+
+    case "DUPLICATE": {
+      const { paneId, terminalId } = action.payload
+      const tree = state.trees[paneId]
+      if (!tree) return state
+      const source = findLeaf(tree, terminalId)
+      if (!source) return state
+
+      const newTermId = nextTermId()
+      const seq = state.nameSeq[paneId] ?? countLeaves(tree)
+      const newTree = splitLeaf(
+        tree,
+        terminalId,
+        "horizontal",
+        newTermId,
+        terminalName(seq)
+      )
+
+      return {
+        ...state,
+        trees: { ...state.trees, [paneId]: newTree },
+        maximized: { ...state.maximized, [paneId]: null },
+        nameSeq: { ...state.nameSeq, [paneId]: seq + 1 },
         activeTerminalId: newTermId,
       }
     }
@@ -203,41 +240,66 @@ function paneReducer(
       const tree = state.trees[paneId]
       if (!tree) return state
 
+      // A pane always keeps at least one terminal.
       if (countLeaves(tree) <= 1) return state
 
       const newTree = removeTerminal(tree, terminalId)
       if (!newTree) return state
 
       const remaining = collectTerminals(newTree)
-      const newActive =
-        state.activeTerminalId === terminalId
-          ? remaining[0]?.id ?? null
-          : state.activeTerminalId
+      const stillExists = remaining.some((t) => t.id === state.activeTerminalId)
 
       return {
         ...state,
         trees: { ...state.trees, [paneId]: newTree },
-        activeTerminalId: newActive,
+        maximized: {
+          ...state.maximized,
+          // Closing the maximized terminal must restore the pane.
+          [paneId]:
+            state.maximized[paneId] === terminalId
+              ? null
+              : state.maximized[paneId],
+        },
+        activeTerminalId: stillExists
+          ? state.activeTerminalId
+          : remaining[0]?.id ?? null,
       }
     }
 
-    case "EXPAND": {
+    case "TOGGLE_MAXIMIZE": {
       const { paneId, terminalId } = action.payload
       const tree = state.trees[paneId]
       if (!tree) return state
+      // Nothing to maximize against in a single-terminal pane.
+      if (countLeaves(tree) <= 1) return state
+      if (!findLeaf(tree, terminalId)) return state
 
-      if (tree.type === "leaf" && tree.terminalId === terminalId) return state
-
-      const newTree = expandTerminal(tree, terminalId)
+      const isMaximized = state.maximized[paneId] === terminalId
       return {
         ...state,
-        trees: { ...state.trees, [paneId]: newTree },
+        maximized: {
+          ...state.maximized,
+          [paneId]: isMaximized ? null : terminalId,
+        },
         activeTerminalId: terminalId,
       }
     }
 
-    case "SET_ACTIVE":
+    case "RENAME": {
+      const { paneId, terminalId, name } = action.payload
+      const tree = state.trees[paneId]
+      const trimmed = name.trim()
+      if (!tree || !trimmed) return state
+      return {
+        ...state,
+        trees: { ...state.trees, [paneId]: renameLeaf(tree, terminalId, trimmed) },
+      }
+    }
+
+    case "SET_ACTIVE": {
+      if (state.activeTerminalId === action.payload.terminalId) return state
       return { ...state, activeTerminalId: action.payload.terminalId }
+    }
 
     default:
       return state
@@ -247,9 +309,15 @@ function paneReducer(
 interface PaneTerminalContextValue {
   state: PaneTreeState
   initPane: (paneId: string, terminalId: string, name: string) => void
-  splitTerminal: (paneId: string, terminalId: string, direction: "horizontal" | "vertical") => void
+  splitTerminal: (
+    paneId: string,
+    terminalId: string,
+    direction: "horizontal" | "vertical"
+  ) => void
   closeTerminal: (paneId: string, terminalId: string) => void
-  expandTerminal: (paneId: string, terminalId: string) => void
+  duplicateTerminal: (paneId: string, terminalId: string) => void
+  toggleMaximize: (paneId: string, terminalId: string) => void
+  renameTerminal: (paneId: string, terminalId: string, name: string) => void
   setActive: (terminalId: string) => void
 }
 
@@ -258,6 +326,8 @@ const PaneTerminalContext = createContext<PaneTerminalContextValue | null>(null)
 export function PaneTerminalProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(paneReducer, {
     trees: {},
+    maximized: {},
+    nameSeq: {},
     activeTerminalId: null,
   })
 
@@ -268,8 +338,11 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
   )
 
   const splitTerminal = useCallback(
-    (paneId: string, terminalId: string, direction: "horizontal" | "vertical") =>
-      dispatch({ type: "SPLIT", payload: { paneId, terminalId, direction } }),
+    (
+      paneId: string,
+      terminalId: string,
+      direction: "horizontal" | "vertical"
+    ) => dispatch({ type: "SPLIT", payload: { paneId, terminalId, direction } }),
     []
   )
 
@@ -279,9 +352,21 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
     []
   )
 
-  const expand = useCallback(
+  const duplicateTerminal = useCallback(
     (paneId: string, terminalId: string) =>
-      dispatch({ type: "EXPAND", payload: { paneId, terminalId } }),
+      dispatch({ type: "DUPLICATE", payload: { paneId, terminalId } }),
+    []
+  )
+
+  const toggleMaximize = useCallback(
+    (paneId: string, terminalId: string) =>
+      dispatch({ type: "TOGGLE_MAXIMIZE", payload: { paneId, terminalId } }),
+    []
+  )
+
+  const renameTerminal = useCallback(
+    (paneId: string, terminalId: string, name: string) =>
+      dispatch({ type: "RENAME", payload: { paneId, terminalId, name } }),
     []
   )
 
@@ -291,17 +376,33 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  // Without this the context value is a fresh object every render, so every
+  // consumer — including each mounted terminal — re-renders on any keystroke.
+  const value = useMemo(
+    () => ({
+      state,
+      initPane,
+      splitTerminal,
+      closeTerminal,
+      duplicateTerminal,
+      toggleMaximize,
+      renameTerminal,
+      setActive,
+    }),
+    [
+      state,
+      initPane,
+      splitTerminal,
+      closeTerminal,
+      duplicateTerminal,
+      toggleMaximize,
+      renameTerminal,
+      setActive,
+    ]
+  )
+
   return (
-    <PaneTerminalContext.Provider
-      value={{
-        state,
-        initPane,
-        splitTerminal,
-        closeTerminal,
-        expandTerminal: expand,
-        setActive,
-      }}
-    >
+    <PaneTerminalContext.Provider value={value}>
       {children}
     </PaneTerminalContext.Provider>
   )
@@ -309,8 +410,12 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
 
 export function usePaneTerminalStore() {
   const ctx = useContext(PaneTerminalContext)
-  if (!ctx) throw new Error("usePaneTerminalStore must be used within PaneTerminalProvider")
+  if (!ctx) {
+    throw new Error(
+      "usePaneTerminalStore must be used within PaneTerminalProvider"
+    )
+  }
   return ctx
 }
 
-export { collectTerminals, countLeaves }
+export { collectTerminals, countLeaves, findLeaf, terminalName }

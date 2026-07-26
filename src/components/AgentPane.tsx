@@ -7,10 +7,9 @@ import { Pane } from "@/components/Pane"
 interface AgentPaneProps {
   title: string
   active?: boolean
-  status?: "running" | "idle" | "warning" | "error"
   progress?: number
   items?: string[]
-  bulletPoints?: { label: string; value: string }[]
+  bulletPoints?: { label: string; value: string; href?: string }[]
   links?: { text: string; href: string }[]
   warning?: string
   server?: string
@@ -22,29 +21,9 @@ interface AgentPaneProps {
   onClose?: () => void
 }
 
-function StatusDot({ status }: { status: AgentPaneProps["status"] }) {
-  const colors = {
-    running: "bg-purple",
-    idle: "bg-bm-text-secondary",
-    warning: "bg-bm-warning",
-    error: "bg-destructive",
-  }
-
-  return (
-    <span
-      className={cn(
-        "size-1.5 rounded-full shrink-0",
-        colors[status ?? "idle"],
-        status === "running" && "animate-pulse"
-      )}
-    />
-  )
-}
-
 export function AgentPane({
   title,
   active = false,
-  status = "idle",
   progress,
   items,
   bulletPoints,
@@ -66,77 +45,90 @@ export function AgentPane({
       active={active}
       progress={progress}
       pinned={pinned}
-      onPin={() => setPinned(!pinned)}
+      onPin={() => setPinned((p) => !p)}
       onClose={onClose}
       className={className}
       footer={
-        <div className="flex items-center justify-between w-full">
-          <span className="flex items-center gap-1.5">
-            <span className="text-bm-text-secondary">»</span>
-            {autoMode && <span>auto mode on</span>}
+        <div className="flex items-center justify-between w-full gap-2">
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="text-bm-text-dim">»</span>
+            {autoMode && <span className="truncate">auto mode on</span>}
             {agentCount > 0 && (
-              <span className="text-bm-text-secondary">
-                · {agentCount} agent{agentCount !== 1 ? "s" : ""}
+              <span className="text-bm-text-dim shrink-0">
+                · {agentCount} agent{agentCount === 1 ? "" : "s"}
               </span>
             )}
           </span>
-          {duration && <span>{duration}</span>}
+          {duration && <span className="shrink-0 text-bm-text-dim">{duration}</span>}
         </div>
       }
     >
       <div className="flex flex-col gap-2">
         {warning && (
-          <div className="text-bm-warning text-[11px] leading-relaxed">
-            {warning}
-          </div>
+          <p className="bm-warning text-[11px] leading-relaxed">{warning}</p>
         )}
 
-        {items && items.length > 0 && (
-          <div className="flex flex-col gap-1">
-            {items.map((item, i) => (
-              <div key={i} className="text-bm-text text-[12px] leading-relaxed">
-                {item}
-              </div>
-            ))}
-          </div>
-        )}
+        {items?.map((item, i) => (
+          <p key={i} className="text-bm-text text-[12px] leading-relaxed">
+            {item}
+          </p>
+        ))}
 
         {bulletPoints && bulletPoints.length > 0 && (
-          <div className="flex flex-col gap-1">
-            {bulletPoints.map((bp, i) => (
-              <div key={i} className="flex items-start gap-2 text-[12px]">
-                <span className="text-bm-text-secondary shrink-0">•</span>
-                <span>
-                  <span className="text-bm-text-secondary">{bp.label}: </span>
-                  <span className="bm-link">{bp.value}</span>
+          <ul className="flex flex-col gap-1">
+            {bulletPoints.map((bp) => (
+              <li key={bp.label} className="flex items-start gap-2 text-[12px]">
+                <span className="text-bm-text-dim shrink-0" aria-hidden>
+                  •
                 </span>
-              </div>
+                <span className="min-w-0">
+                  <span className="text-bm-text-secondary">{bp.label}: </span>
+                  {/* Values that carry an href are real links; the rest are
+                      plain text rather than link-coloured non-links. */}
+                  {bp.href ? (
+                    <a href={bp.href} className="bm-link break-all">
+                      {bp.value}
+                    </a>
+                  ) : (
+                    <span className="text-bm-text break-all">{bp.value}</span>
+                  )}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
         {links && links.length > 0 && (
-          <div className="flex flex-col gap-1">
-            {links.map((link, i) => (
-              <div key={i} className="text-[12px]">
-                <span className="bm-link cursor-pointer">{link.text}</span>
-              </div>
+          <ul className="flex flex-col gap-1">
+            {links.map((link) => (
+              <li key={link.href} className="text-[12px]">
+                <a href={link.href} className="bm-link break-all">
+                  {link.text}
+                </a>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
-        {server && (
-          <div className="flex flex-col gap-0.5 text-[12px]">
-            <span className="text-bm-text-secondary">Server:</span>
-            <span className="bm-link">{server}</span>
-          </div>
-        )}
-
-        {controlPanel && (
-          <div className="flex flex-col gap-0.5 text-[12px]">
-            <span className="text-bm-text-secondary">Control Panel:</span>
-            <span className="bm-link">{controlPanel}</span>
-          </div>
+        {(server || controlPanel) && (
+          <dl className={cn("flex flex-col gap-1.5 text-[12px]")}>
+            {server && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-bm-text-secondary">Server:</dt>
+                <dd className="text-bm-text break-all">{server}</dd>
+              </div>
+            )}
+            {controlPanel && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-bm-text-secondary">Control Panel:</dt>
+                <dd>
+                  <a href={controlPanel} className="bm-link break-all">
+                    {controlPanel}
+                  </a>
+                </dd>
+              </div>
+            )}
+          </dl>
         )}
       </div>
     </Pane>

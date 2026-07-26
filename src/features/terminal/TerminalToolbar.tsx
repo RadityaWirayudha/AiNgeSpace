@@ -35,9 +35,11 @@ function ToolbarButton({
       <TooltipTrigger
         render={
           <button
+            type="button"
+            aria-label={label}
             onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
-              "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
+              "inline-flex items-center justify-center size-6 rounded-md transition-colors",
               "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06]",
               variant === "destructive" &&
                 "hover:text-destructive hover:bg-destructive/10"
@@ -72,9 +74,11 @@ function SplitButton({
       <TooltipTrigger
         render={
           <button
+            type="button"
+            aria-label={label}
             onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
-              "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
+              "inline-flex items-center justify-center size-6 rounded-md transition-colors",
               "hover:bg-purple/10 group"
             )}
           />
@@ -133,9 +137,11 @@ function DuplicateButton({ label, onClick }: { label: string; onClick: () => voi
       <TooltipTrigger
         render={
           <button
+            type="button"
+            aria-label={label}
             onClick={(e) => { e.stopPropagation(); onClick() }}
             className={cn(
-              "inline-flex items-center justify-center size-6 rounded-md transition-colors outline-none",
+              "inline-flex items-center justify-center size-6 rounded-md transition-colors",
               "hover:bg-purple/10 group"
             )}
           />

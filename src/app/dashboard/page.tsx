@@ -161,8 +161,22 @@ export default function DashboardPage() {
       <CreateWorkspaceDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onCreated={(id) => {
-          router.push(`/workspace/${id}`)
+        onCreated={(draft) => {
+          // Hand the chosen layout to the workspace route, which reads and
+          // clears it on mount.
+          try {
+            localStorage.setItem(
+              "aingespace:pending-layout",
+              JSON.stringify({
+                terminalCount: draft.terminalCount,
+                layoutId: draft.layoutId,
+                agentIds: draft.agentIds,
+              })
+            )
+          } catch {
+            // Private mode / storage disabled — the workspace still opens.
+          }
+          router.push(`/workspace/${draft.id}`)
         }}
       />
     </div>

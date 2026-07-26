@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import {
   X,
   Check,
@@ -20,6 +20,7 @@ import {
   Sparkles,
   Zap,
   Play,
+  AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,10 +29,21 @@ import { Badge } from "@/components/ui/badge"
 /* ------------------------------------------------------------------
    TYPES
 -------------------------------------------------------------------*/
+export interface WorkspaceDraft {
+  id: string
+  name: string
+  repo: string
+  branch: string
+  layoutId: string
+  terminalCount: number
+  agentIds: string[]
+  agentCount: number
+}
+
 interface CreateWorkspaceDialogProps {
   open: boolean
   onClose: () => void
-  onCreated?: (workspaceId: string) => void
+  onCreated?: (draft: WorkspaceDraft) => void
 }
 
 /* ------------------------------------------------------------------
@@ -44,12 +56,12 @@ const STEPS = [
 ] as const
 
 const LAYOUTS = [
-  { id: "l1", label: "1", count: 1, cells: [[1, 1]] },
-  { id: "l2v", label: "2", count: 2, cells: [[1, 1], [1, 1]], dir: "row" as const },
-  { id: "l2h", label: "2", count: 2, cells: [[1], [1]], dir: "col" as const },
-  { id: "l4", label: "4", count: 4, grid: [2, 2] as const },
-  { id: "l6", label: "6", count: 6, grid: [3, 2] as const },
-  { id: "l8", label: "8", count: 8, grid: [4, 2] as const },
+  { id: "l1", label: "1", count: 1 },
+  { id: "l2v", label: "2", count: 2, dir: "row" },
+  { id: "l2h", label: "2", count: 2, dir: "col" },
+  { id: "l4", label: "4", count: 4, grid: [2, 2] },
+  { id: "l6", label: "6", count: 6, grid: [3, 2] },
+  { id: "l8", label: "8", count: 8, grid: [4, 2] },
 ] as const
 
 const PRESETS = [
@@ -69,98 +81,92 @@ const AGENTS = [
   { id: "a5", name: "Watcher", provider: "Anthropic", model: "Haiku 4.5", icon: Terminal, desc: "Memantau log dan pipeline, menandai kegagalan.", tokens: "~1k / turn" },
 ] as const
 
+type Layout = (typeof LAYOUTS)[number]
+
 /* ------------------------------------------------------------------
    GRID PREVIEW
 -------------------------------------------------------------------*/
-interface LayoutGrid {
-  grid: readonly [number, number]
-  dir?: never
-}
-
-interface LayoutDir {
-  grid?: never
-  dir: "row" | "col"
-}
-
-interface LayoutSingle {
-  grid?: never
-  dir?: never
-}
-
-type LayoutShape = LayoutGrid | LayoutDir | LayoutSingle
-
 function GridPreview({
   layout,
   size = 44,
   active,
 }: {
-  layout: (typeof LAYOUTS)[number]
+  layout: Layout
   size?: number
   active: boolean
 }) {
-  const cellColor = active ? "border-purple" : "border-zinc-600"
-  const cellBg = active ? "bg-purple/10" : "bg-transparent"
+  const cell = cn(
+    "rounded-[2px] border",
+    active ? "border-purple bg-purple/10" : "border-zinc-600"
+  )
   const opacity = active ? "opacity-100" : "opacity-55"
-  const shape = layout as unknown as LayoutShape
+  const grid = "grid" in layout ? layout.grid : undefined
+  const dir = "dir" in layout ? layout.dir : undefined
 
-  if (shape.grid) {
-    const [cols, rows] = shape.grid
+  if (grid) {
+    const [cols, rows] = grid
     return (
       <div
         className={cn("grid gap-[3px]", opacity)}
-        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, width: size, height: size }}
+        style={{
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+          width: size,
+          height: size,
+        }}
       >
         {Array.from({ length: cols * rows }).map((_, i) => (
-          <div key={i} className={cn("rounded-[2px] border", cellColor, cellBg)} />
+          <div key={i} className={cell} />
         ))}
       </div>
     )
   }
 
-  if (shape.dir === "row") {
+  if (dir) {
     return (
-      <div className={cn("flex gap-[3px]", opacity)} style={{ width: size, height: size }}>
-        <div className={cn("flex-1 rounded-[2px] border", cellColor, cellBg)} />
-        <div className={cn("flex-1 rounded-[2px] border", cellColor, cellBg)} />
-      </div>
-    )
-  }
-
-  if (shape.dir === "col") {
-    return (
-      <div className={cn("flex flex-col gap-[3px]", opacity)} style={{ width: size, height: size }}>
-        <div className={cn("flex-1 rounded-[2px] border", cellColor, cellBg)} />
-        <div className={cn("flex-1 rounded-[2px] border", cellColor, cellBg)} />
+      <div
+        className={cn("flex gap-[3px]", dir === "col" && "flex-col", opacity)}
+        style={{ width: size, height: size }}
+      >
+        <div className={cn("flex-1", cell)} />
+        <div className={cn("flex-1", cell)} />
       </div>
     )
   }
 
   return (
-    <div
-      className={cn("rounded-[2px] border", cellColor, cellBg, opacity)}
-      style={{ width: size, height: size }}
-    />
+    <div className={cn(cell, opacity)} style={{ width: size, height: size }} />
   )
 }
 
 /* ------------------------------------------------------------------
    TOGGLE
 -------------------------------------------------------------------*/
-function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+function Toggle({
+  on,
+  onClick,
+  label,
+}: {
+  on: boolean
+  onClick: () => void
+  label: string
+}) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={on}
+      aria-label={label}
       onClick={onClick}
       className={cn(
-        "relative w-9 h-5 rounded-full shrink-0 transition-colors duration-150 outline-none cursor-pointer",
+        "relative w-9 h-5 rounded-full shrink-0 transition-colors duration-150 cursor-pointer",
         on ? "bg-purple" : "bg-zinc-700"
       )}
     >
-      <div
+      <span
         className={cn(
-          "absolute top-[2px] w-4 h-4 rounded-full transition-all duration-150",
-          on ? "left-[18px] bg-[#0E0E10]" : "left-[2px] bg-zinc-500"
+          "absolute top-[2px] size-4 rounded-full transition-all duration-150",
+          on ? "left-[18px] bg-[#0E0E10]" : "left-[2px] bg-zinc-400"
         )}
       />
     </button>
@@ -168,20 +174,21 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
 }
 
 /* ------------------------------------------------------------------
-   STEP INDICATORS
+   STEPPER
 -------------------------------------------------------------------*/
 function Stepper({ current }: { current: number }) {
   return (
-    <div className="flex items-center justify-center gap-2.5 mb-1">
+    <ol className="flex items-center justify-center gap-2.5">
       {STEPS.map((s, i) => {
         const done = s.id < current
         const active = s.id === current
         return (
-          <div key={s.id} className="flex items-center gap-2">
+          <li key={s.id} className="flex items-center gap-2">
             <div className="flex items-center gap-2">
-              <div
+              <span
+                aria-current={active ? "step" : undefined}
                 className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-150 border",
+                  "size-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors border",
                   done
                     ? "bg-purple border-purple text-[#0E0E10]"
                     : active
@@ -190,30 +197,65 @@ function Stepper({ current }: { current: number }) {
                 )}
               >
                 {done ? <Check className="size-3" strokeWidth={2.5} /> : s.id}
-              </div>
+              </span>
               <span
                 className={cn(
                   "text-[13px] font-medium transition-colors",
-                  active ? "text-foreground" : done ? "text-zinc-400" : "text-zinc-600"
+                  active
+                    ? "text-foreground"
+                    : done
+                      ? "text-zinc-400"
+                      : "text-zinc-600"
                 )}
               >
                 {s.label}
               </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  "w-8 h-px",
-                  done ? "bg-purple/60" : "bg-zinc-700"
-                )}
+              <span
+                className={cn("w-8 h-px", done ? "bg-purple/60" : "bg-zinc-700")}
               />
             )}
-          </div>
+          </li>
         )
       })}
+    </ol>
+  )
+}
+
+/* ------------------------------------------------------------------
+   FIELD
+-------------------------------------------------------------------*/
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string
+  hint?: string
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="text-[13px] font-semibold text-foreground block mb-1">
+        {label}
+      </label>
+      {hint && <p className="text-[11px] text-zinc-500 mb-2">{hint}</p>}
+      {children}
+      {error && (
+        <p className="flex items-center gap-1 text-[11px] text-destructive mt-1.5">
+          <AlertCircle className="size-3 shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   )
 }
+
+const inputCls =
+  "w-full h-9 px-3 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-zinc-600 outline-none focus:border-purple/50 transition-colors font-mono"
 
 /* ------------------------------------------------------------------
    LANGKAH 1 — REPOSITORI
@@ -225,6 +267,7 @@ function RepositoryStep({
   setRepoUrl,
   branch,
   setBranch,
+  showErrors,
 }: {
   workspaceName: string
   setWorkspaceName: (v: string) => void
@@ -232,56 +275,68 @@ function RepositoryStep({
   setRepoUrl: (v: string) => void
   branch: string
   setBranch: (v: string) => void
+  showErrors: boolean
 }) {
+  const nameError =
+    showErrors && !workspaceName.trim() ? "Nama workspace wajib diisi." : undefined
+  // Validate the shape rather than only checking for emptiness, so the repo is
+  // usable downstream.
+  const repoError =
+    showErrors && !/^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
+      ? "Gunakan format pengguna/nama-repo."
+      : undefined
+
   return (
     <div className="space-y-5">
-      <div>
-        <label className="text-[13px] font-semibold text-foreground block mb-1.5">
-          Nama workspace
-        </label>
-        <p className="text-[11px] text-zinc-500 mb-2.5">
-          Label untuk workspace ini di sidebar.
-        </p>
+      <Field
+        label="Nama workspace"
+        hint="Label untuk workspace ini di sidebar."
+        error={nameError}
+      >
         <input
           value={workspaceName}
           onChange={(e) => setWorkspaceName(e.target.value)}
           placeholder="proyek-saya"
-          className="w-full h-9 px-3 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-zinc-600 outline-none focus:border-purple/50 focus:ring-1 focus:ring-purple/20 transition-colors font-mono"
+          aria-invalid={!!nameError}
+          className={cn(inputCls, nameError && "border-destructive/60")}
         />
-      </div>
+      </Field>
 
-      <div>
-        <label className="text-[13px] font-semibold text-foreground block mb-1.5">
-          Repositori GitHub
-        </label>
-        <p className="text-[11px] text-zinc-500 mb-2.5">
-          Repo yang akan digunakan workspace ini.
-        </p>
-        <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border border-border focus-within:border-purple/50 focus-within:ring-1 focus-within:ring-purple/20 transition-colors">
+      <Field
+        label="Repositori GitHub"
+        hint="Repo yang akan digunakan workspace ini."
+        error={repoError}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border transition-colors focus-within:border-purple/50",
+            repoError ? "border-destructive/60" : "border-border"
+          )}
+        >
           <Folder className="size-3.5 text-zinc-500 shrink-0" />
           <input
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="user/nama-repo"
-            className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
+            aria-invalid={!!repoError}
+            aria-label="Repositori GitHub"
+            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
           />
         </div>
-      </div>
+      </Field>
 
-      <div>
-        <label className="text-[13px] font-semibold text-foreground block mb-1.5">
-          Cabang
-        </label>
-        <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border border-border focus-within:border-purple/50 focus-within:ring-1 focus-within:ring-purple/20 transition-colors">
+      <Field label="Cabang">
+        <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border border-border focus-within:border-purple/50 transition-colors">
           <GitBranch className="size-3.5 text-zinc-500 shrink-0" />
           <input
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
             placeholder="main"
-            className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
+            aria-label="Cabang"
+            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
           />
         </div>
-      </div>
+      </Field>
     </div>
   )
 }
@@ -293,44 +348,49 @@ function LayoutStep({
   layoutId,
   setLayoutId,
   presetId,
-  setPresetId,
+  applyPreset,
 }: {
   layoutId: string
   setLayoutId: (v: string) => void
   presetId: string | null
-  setPresetId: (v: string | null) => void
+  applyPreset: (id: string) => void
 }) {
-  const active = LAYOUTS.find((l) => l.id === layoutId)!
+  const active = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
 
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-start justify-between mb-3 gap-3">
           <div>
-            <label className="text-[13px] font-semibold text-foreground block">
+            <span className="text-[13px] font-semibold text-foreground block">
               Layout terminal
-            </label>
+            </span>
             <p className="text-[11px] text-zinc-500 mt-0.5">
               Berapa banyak panel terminal yang kamu butuhkan?
             </p>
           </div>
-          <Badge variant="secondary" className="text-[11px] font-mono">
+          <Badge variant="secondary" className="text-[11px] font-mono shrink-0">
             {active.count} terminal
           </Badge>
         </div>
 
-        <div className="grid grid-cols-6 gap-2">
+        <div
+          role="radiogroup"
+          aria-label="Layout terminal"
+          className="grid grid-cols-3 sm:grid-cols-6 gap-2"
+        >
           {LAYOUTS.map((l) => {
             const on = l.id === layoutId
             return (
               <button
                 key={l.id}
-                onClick={() => {
-                  setLayoutId(l.id)
-                  setPresetId(null)
-                }}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={`${l.count} terminal`}
+                onClick={() => setLayoutId(l.id)}
                 className={cn(
-                  "flex flex-col items-center gap-2 py-3 px-1 rounded-lg cursor-pointer transition-all duration-150 border",
+                  "flex flex-col items-center gap-2 py-3 px-1 rounded-lg cursor-pointer transition-colors border",
                   on
                     ? "bg-purple/10 border-purple"
                     : "bg-secondary border-border hover:border-zinc-500"
@@ -340,7 +400,7 @@ function LayoutStep({
                 <span
                   className={cn(
                     "text-[11px] font-semibold",
-                    on ? "text-purple" : "text-zinc-600"
+                    on ? "text-purple" : "text-zinc-500"
                   )}
                 >
                   {l.label}
@@ -352,46 +412,50 @@ function LayoutStep({
       </div>
 
       <div>
-        <label className="text-[13px] font-semibold text-foreground block mb-1">
+        <span className="text-[13px] font-semibold text-foreground block mb-1">
           Prasetel
-        </label>
+        </span>
         <p className="text-[11px] text-zinc-500 mb-3">
-          Workspace, layout, dan agen dalam satu klik.
+          Layout dan agen dalam satu klik.
         </p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PRESETS.map((p) => {
             const on = presetId === p.id
             const Icon = p.icon
             return (
               <button
                 key={p.id}
-                onClick={() => {
-                  setPresetId(p.id)
-                  setLayoutId(p.layout)
-                }}
+                type="button"
+                aria-pressed={on}
+                onClick={() => applyPreset(p.id)}
                 className={cn(
-                  "text-left flex flex-col gap-2 p-3 rounded-lg cursor-pointer transition-all duration-150 border",
+                  "text-left flex flex-col gap-2 p-3 rounded-lg cursor-pointer transition-colors border",
                   on
                     ? "bg-purple/10 border-purple"
                     : "bg-secondary border-border hover:border-zinc-500"
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <div
+                  <span
                     className={cn(
-                      "w-6 h-6 rounded-md flex items-center justify-center",
+                      "size-6 rounded-md flex items-center justify-center",
                       on ? "bg-purple" : "bg-zinc-800"
                     )}
                   >
                     <Icon
-                      className={cn("size-3.5", on ? "text-[#0E0E10]" : "text-zinc-500")}
+                      className={cn(
+                        "size-3.5",
+                        on ? "text-[#0E0E10]" : "text-zinc-400"
+                      )}
                       strokeWidth={1.9}
                     />
-                  </div>
+                  </span>
                   {on && <Check className="size-3.5 text-purple" strokeWidth={2.5} />}
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold text-foreground">{p.name}</div>
+                  <div className="text-[13px] font-semibold text-foreground">
+                    {p.name}
+                  </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">{p.desc}</div>
                 </div>
               </button>
@@ -417,16 +481,16 @@ function AgentsStep({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <label className="text-[13px] font-semibold text-foreground block">
+          <span className="text-[13px] font-semibold text-foreground block">
             Jalankan agen secara otomatis
-          </label>
+          </span>
           <p className="text-[11px] text-zinc-500 mt-0.5">
-            Agen akan dimulai di panel terminal masing-masing saat workspace dibuka.
+            Agen dimulai di panel terminal masing-masing saat workspace dibuka.
           </p>
         </div>
-        <Badge variant="secondary" className="text-[11px] font-mono">
+        <Badge variant="secondary" className="text-[11px] font-mono shrink-0">
           {activeCount} aktif
         </Badge>
       </div>
@@ -439,23 +503,21 @@ function AgentsStep({
             <div
               key={a.id}
               className={cn(
-                "flex items-start gap-3 p-3.5 rounded-lg border transition-all duration-150",
-                on
-                  ? "bg-purple/5 border-purple/30"
-                  : "bg-secondary border-border"
+                "flex items-start gap-3 p-3.5 rounded-lg border transition-colors",
+                on ? "bg-purple/5 border-purple/30" : "bg-secondary border-border"
               )}
             >
-              <div
+              <span
                 className={cn(
-                  "w-8 h-8 rounded-lg shrink-0 mt-0.5 flex items-center justify-center",
+                  "size-8 rounded-lg shrink-0 mt-0.5 flex items-center justify-center",
                   on ? "bg-purple" : "bg-zinc-800"
                 )}
               >
                 <Icon
-                  className={cn("size-3.5", on ? "text-[#0E0E10]" : "text-zinc-500")}
+                  className={cn("size-3.5", on ? "text-[#0E0E10]" : "text-zinc-400")}
                   strokeWidth={1.9}
                 />
-              </div>
+              </span>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -465,14 +527,18 @@ function AgentsStep({
                   <span className="text-[11px] text-zinc-500">
                     {a.provider} · {a.model}
                   </span>
-                  <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded ml-auto font-mono">
+                  <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded ml-auto font-mono">
                     {a.tokens}
                   </span>
                 </div>
-                <div className="text-[12px] text-zinc-500 mt-1">{a.desc}</div>
+                <p className="text-[12px] text-zinc-500 mt-1">{a.desc}</p>
               </div>
 
-              <Toggle on={on} onClick={() => toggleAgent(a.id)} />
+              <Toggle
+                on={on}
+                onClick={() => toggleAgent(a.id)}
+                label={`Aktifkan agen ${a.name}`}
+              />
             </div>
           )
         })}
@@ -490,6 +556,7 @@ export function CreateWorkspaceDialog({
   onCreated,
 }: CreateWorkspaceDialogProps) {
   const [step, setStep] = useState(1)
+  const [showErrors, setShowErrors] = useState(false)
   const [workspaceName, setWorkspaceName] = useState("")
   const [repoUrl, setRepoUrl] = useState("")
   const [branch, setBranch] = useState("main")
@@ -497,31 +564,127 @@ export function CreateWorkspaceDialog({
   const [presetId, setPresetId] = useState<string | null>(null)
   const [agents, setAgents] = useState<Record<string, boolean>>({ a1: true })
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  const reset = useCallback(() => {
+    setStep(1)
+    setShowErrors(false)
+    setWorkspaceName("")
+    setRepoUrl("")
+    setBranch("main")
+    setLayoutId("l1")
+    setPresetId(null)
+    setAgents({ a1: true })
+    setSubmitting(false)
+    setSubmitError(null)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    reset()
+    onClose()
+  }, [reset, onClose])
+
+  // Escape to dismiss and a body scroll lock — the dialog previously trapped
+  // the user with only the small × as an exit, and the page scrolled behind it.
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation()
+        handleClose()
+      }
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open, handleClose])
+
+  // Keep Tab inside the dialog; without this, focus walked into the page
+  // underneath while the modal was still covering it.
+  useEffect(() => {
+    if (!open) return
+    const node = dialogRef.current
+    if (!node) return
+
+    const first = node.querySelector<HTMLElement>(
+      "input, button:not([disabled])"
+    )
+    first?.focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return
+      const focusables = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null)
+      if (focusables.length === 0) return
+      const firstEl = focusables[0]
+      const lastEl = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === firstEl) {
+        e.preventDefault()
+        lastEl.focus()
+      } else if (!e.shiftKey && document.activeElement === lastEl) {
+        e.preventDefault()
+        firstEl.focus()
+      }
+    }
+    node.addEventListener("keydown", onKeyDown)
+    return () => node.removeEventListener("keydown", onKeyDown)
+  }, [open, step])
 
   const toggleAgent = useCallback((id: string) => {
     setAgents((prev) => ({ ...prev, [id]: !prev[id] }))
+    // Hand-editing agents means the selection no longer matches a preset.
+    setPresetId(null)
+  }, [])
+
+  // Presets advertised an agent set but only ever applied the layout, so
+  // picking "AI Dev" silently left you with the default single agent.
+  const applyPreset = useCallback((id: string) => {
+    const preset = PRESETS.find((p) => p.id === id)
+    if (!preset) return
+    setPresetId(id)
+    setLayoutId(preset.layout)
+    setAgents(Object.fromEntries(preset.agents.map((a) => [a, true])))
   }, [])
 
   const heading = useMemo(() => {
-    if (step === 1) return { title: "Pilih repositorimu", sub: "Hubungkan repo GitHub dan beri nama workspace." }
-    if (step === 2) return { title: "Atur layout", sub: "Pilih berapa banyak terminal yang ingin dijalankan berdampingan." }
-    return { title: "Tambah agen AI", sub: "Pilih agen mana yang otomatis dijalankan saat workspace ini dibuka." }
+    if (step === 1)
+      return {
+        title: "Pilih repositorimu",
+        sub: "Hubungkan repo GitHub dan beri nama workspace.",
+      }
+    if (step === 2)
+      return {
+        title: "Atur layout",
+        sub: "Pilih berapa banyak terminal yang berjalan berdampingan.",
+      }
+    return {
+      title: "Tambah agen AI",
+      sub: "Pilih agen yang otomatis dijalankan saat workspace dibuka.",
+    }
   }, [step])
 
-  const canNext = useMemo(() => {
-    if (step === 1) return workspaceName.trim().length > 0 && repoUrl.trim().length > 0
-    return true
-  }, [step, workspaceName, repoUrl])
+  const step1Valid =
+    workspaceName.trim().length > 0 &&
+    /^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
 
   const handleLaunch = async () => {
     setSubmitting(true)
+    setSubmitError(null)
     try {
-      const selectedLayout = LAYOUTS.find((l) => l.id === layoutId)
-      const terminalCount = selectedLayout?.count ?? 1
+      const terminalCount =
+        LAYOUTS.find((l) => l.id === layoutId)?.count ?? 1
+      const agentIds = AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
 
       let workspaceId: string | null = null
-
-      // Coba buat workspace lewat API
       try {
         const res = await fetch("/api/workspaces", {
           method: "POST",
@@ -534,133 +697,155 @@ export function CreateWorkspaceDialog({
         })
         if (res.ok) {
           const data = await res.json()
-          workspaceId = data.id
+          workspaceId = data.id ?? null
         }
       } catch {
-        // API gagal, lanjut dengan ID client-side
+        // Offline or unauthenticated — fall back to a local-only workspace
+        // rather than blocking the user.
       }
 
-      // Kalau API gagal, buat ID sendiri
-      if (!workspaceId) {
-        workspaceId = `ws-${Date.now()}`
-      }
+      if (!workspaceId) workspaceId = `ws-${Date.now()}`
 
-      // Simpan config ke localStorage dan navigasi
-      const layoutPayload = { terminalCount, layoutId, agents }
-      localStorage.setItem("aingespace:pending-layout", JSON.stringify(layoutPayload))
-
-      onCreated?.(workspaceId)
+      onCreated?.({
+        id: workspaceId,
+        name: workspaceName.trim(),
+        repo: repoUrl.trim(),
+        branch: branch.trim() || "main",
+        layoutId,
+        terminalCount,
+        agentIds,
+        agentCount: agentIds.length,
+      })
       handleClose()
+    } catch {
+      setSubmitError("Gagal membuat workspace. Coba lagi.")
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleClose = () => {
-    setStep(1)
-    setWorkspaceName("")
-    setRepoUrl("")
-    setBranch("main")
-    setLayoutId("l1")
-    setPresetId(null)
-    setAgents({ a1: true })
-    setSubmitting(false)
-    onClose()
+  const goNext = () => {
+    if (step === 1 && !step1Valid) {
+      // The old build let you tab past an invalid step and only failed later.
+      setShowErrors(true)
+      return
+    }
+    setShowErrors(false)
+    setStep((s) => Math.min(3, s + 1))
   }
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in-up"
-        style={{ animationDuration: "0.2s" }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-bm-fade-in"
         onClick={handleClose}
       />
 
-      {/* dialog */}
       <div
-        className="relative w-full max-w-[640px] bg-bm-pane border border-bm-border rounded-xl shadow-2xl overflow-hidden animate-fade-in-up"
-        style={{ animationDuration: "0.25s" }}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-ws-title"
+        className="relative w-full max-w-[640px] max-h-[90vh] flex flex-col bg-bm-pane border border-bm-border rounded-xl shadow-2xl overflow-hidden animate-bm-dialog-in"
       >
-        {/* tombol tutup */}
         <button
+          type="button"
           onClick={handleClose}
-          className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-foreground hover:bg-white/5 transition-colors"
+          aria-label="Tutup dialog"
+          className="absolute top-3 right-3 z-10 size-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-foreground hover:bg-white/5 transition-colors"
         >
           <X className="size-4" />
         </button>
 
-        <div className="px-7 pt-6 pb-5">
+        {/* The body scrolls on short viewports; the old fixed min-height pushed
+            the footer buttons off-screen on laptops. */}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-7 pt-6 pb-5">
           <Stepper current={step} />
 
           <div className="text-center mt-4 mb-5">
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
+            <h2
+              id="create-ws-title"
+              className="text-lg font-bold tracking-tight text-foreground"
+            >
               {heading.title}
             </h2>
             <p className="text-[12px] text-zinc-500 mt-1">{heading.sub}</p>
           </div>
 
-          <div className="min-h-[320px]">
-            {step === 1 && (
-              <RepositoryStep
-                workspaceName={workspaceName}
-                setWorkspaceName={setWorkspaceName}
-                repoUrl={repoUrl}
-                setRepoUrl={setRepoUrl}
-                branch={branch}
-                setBranch={setBranch}
-              />
-            )}
-            {step === 2 && (
-              <LayoutStep
-                layoutId={layoutId}
-                setLayoutId={setLayoutId}
-                presetId={presetId}
-                setPresetId={setPresetId}
-              />
-            )}
-            {step === 3 && (
-              <AgentsStep enabled={agents} toggleAgent={toggleAgent} />
-            )}
-          </div>
+          {step === 1 && (
+            <RepositoryStep
+              workspaceName={workspaceName}
+              setWorkspaceName={setWorkspaceName}
+              repoUrl={repoUrl}
+              setRepoUrl={setRepoUrl}
+              branch={branch}
+              setBranch={setBranch}
+              showErrors={showErrors}
+            />
+          )}
+          {step === 2 && (
+            <LayoutStep
+              layoutId={layoutId}
+              setLayoutId={(id) => {
+                setLayoutId(id)
+                setPresetId(null)
+              }}
+              presetId={presetId}
+              applyPreset={applyPreset}
+            />
+          )}
+          {step === 3 && <AgentsStep enabled={agents} toggleAgent={toggleAgent} />}
+
+          {submitError && (
+            <p className="flex items-center gap-1.5 text-[12px] text-destructive mt-4">
+              <AlertCircle className="size-3.5 shrink-0" />
+              {submitError}
+            </p>
+          )}
         </div>
 
-        {/* footer */}
-        <div className="flex items-center justify-between px-7 py-4 border-t border-bm-border/50 bg-bm-bg/40">
+        <div className="flex items-center justify-between px-7 py-4 border-t border-bm-border bg-bm-bg/40 shrink-0">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
-            disabled={step === 1}
-            className="gap-1 text-zinc-500"
+            onClick={() => {
+              setShowErrors(false)
+              setStep((s) => Math.max(1, s - 1))
+            }}
+            disabled={step === 1 || submitting}
+            className="gap-1 text-zinc-400"
           >
             <ChevronLeft className="size-3.5" />
             Kembali
           </Button>
 
           <div className="flex items-center gap-2">
+            {/* "Lewati" used to call handleClose, throwing away everything the
+                user had entered. It now jumps to the last step instead. */}
             {step < 3 && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleClose}
-                className="text-zinc-500"
+                onClick={() => {
+                  if (!step1Valid) {
+                    setShowErrors(true)
+                    setStep(1)
+                    return
+                  }
+                  setStep(3)
+                }}
+                disabled={submitting}
+                className="text-zinc-400"
               >
                 Lewati
               </Button>
             )}
             <Button
               size="sm"
-              disabled={!canNext || submitting}
-              onClick={() => {
-                if (step < 3) {
-                  setStep((s) => s + 1)
-                } else {
-                  handleLaunch()
-                }
-              }}
+              disabled={submitting}
+              onClick={() => (step < 3 ? goNext() : handleLaunch())}
               className={cn(
                 "gap-1.5 font-semibold",
                 step === 3 && "bg-purple hover:bg-purple-dark glow-purple-sm"
