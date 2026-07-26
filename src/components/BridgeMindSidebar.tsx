@@ -169,19 +169,6 @@ function toneFor(status: string): string {
   }
 }
 
-function textToneFor(status: string): string {
-  switch (status) {
-    case "running":
-      return "text-bm-live"
-    case "warning":
-      return "text-bm-warning"
-    case "error":
-      return "text-destructive"
-    default:
-      return "text-bm-text-dim"
-  }
-}
-
 function initials(name: string): string {
   const words = name.trim().split(/[\s_\-./]+/).filter(Boolean)
   if (words.length === 0) return "··"
@@ -290,14 +277,27 @@ function RenameInput({
   )
 }
 
+/** Paint size. The pointer target is always larger than the box — see
+ *  `.bm-ib::after` — so `sm` stays visually quiet without being unhittable. */
+type IconButtonSize = "sm" | "md" | "lg"
+
+const ICON_SIZE: Record<IconButtonSize, string> = {
+  sm: "size-3",
+  md: "size-3.5",
+  lg: "size-3.5",
+}
+
 function IconButton({
   icon: Icon,
   label,
   onClick,
   active = false,
   danger = false,
+  primary = false,
   focusable = true,
+  size = "sm",
   side = "right",
+  shortcut,
   className,
 }: {
   icon: React.ComponentType<{ className?: string }>
@@ -305,10 +305,16 @@ function IconButton({
   onClick: () => void
   active?: boolean
   danger?: boolean
+  /** Rests one greyscale step brighter, for the one action a band is *for*. */
+  primary?: boolean
   /** Row actions opt out: three tab stops per workspace would bury the tree,
    *  and the same commands are on the row's context menu. */
   focusable?: boolean
+  size?: IconButtonSize
   side?: "top" | "right" | "bottom" | "left"
+  /** Rendered as a right-aligned key hint in the tooltip rather than being
+   *  pasted into the label, so the accessible name stays a plain verb. */
+  shortcut?: string
   className?: string
 }) {
   return (
@@ -325,21 +331,24 @@ function IconButton({
               onClick()
             }}
             className={cn(
-              "inline-flex items-center justify-center size-5 rounded-sm shrink-0",
-              "transition-[color,background-color,opacity] duration-100",
-              active
-                ? "text-bm-text bg-white/[0.08]"
-                : "text-bm-text-dim hover:text-bm-text hover:bg-white/[0.08]",
-              danger && "hover:text-destructive hover:bg-destructive/10",
+              "bm-ib",
+              `bm-ib-${size}`,
+              primary && "bm-ib-primary",
+              danger && "bm-ib-danger",
               className
             )}
           />
         }
       >
-        <Icon className="size-3" />
+        <Icon className={cn(ICON_SIZE[size], "relative")} />
       </TooltipTrigger>
+      {/* The popup is already an inline-flex row, so the label and the key hint
+          just sit in it as siblings. */}
       <TooltipContent side={side} className="text-[10px] font-mono">
-        {label}
+        <span>{label}</span>
+        {shortcut && (
+          <span className="text-bm-text-dim tracking-wide">{shortcut}</span>
+        )}
       </TooltipContent>
     </Tooltip>
   )
@@ -382,25 +391,20 @@ function MeterChip({
             type="button"
             aria-pressed={on}
             onClick={() => onFilter(on ? "all" : status)}
-            className={cn(
-              "inline-flex items-center gap-1 h-[18px] px-1.5 rounded-sm shrink-0",
-              "text-[10px] tabular-nums transition-colors duration-100",
-              on
-                ? cn("bg-white/[0.08]", textToneFor(status))
-                : "text-bm-text-dim hover:bg-white/[0.05] hover:text-bm-text-secondary"
-            )}
+            data-tone={status}
+            className="bm-chip"
           />
         }
       >
         <span
           className={cn(
-            "size-1.5 rounded-full shrink-0",
+            "relative size-1.5 rounded-full shrink-0",
             count > 0 ? toneFor(status) : "bg-bm-text-dim/50",
             status === "running" && count > 0 && "bm-dot-live"
           )}
         />
-        <span>{count}</span>
-        <span>{label}</span>
+        <span className="relative">{count}</span>
+        <span className="relative">{label}</span>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="text-[10px] font-mono">
         {on ? "Show every pane" : `Show only ${label} panes`}
@@ -597,13 +601,8 @@ function ContextMenu({
             onClose()
           }}
           className={cn(
-            "flex w-full items-center gap-2 px-2 py-1 text-left text-[10px]",
-            "transition-colors duration-100",
-            entry.disabled
-              ? "text-bm-text-dim/50 cursor-default"
-              : entry.danger
-                ? "text-bm-text-secondary hover:bg-destructive/10 hover:text-destructive"
-                : "text-bm-text-secondary hover:bg-white/[0.06] hover:text-bm-text"
+            "bm-menu-item",
+            entry.danger && "bm-menu-item-danger"
           )}
         >
           <entry.icon className="size-3 shrink-0" />
@@ -725,14 +724,14 @@ function WorkspaceRow({
             // says which workspace this one closes.
             aria-label={`Close workspace ${workspace.name}`}
             data-sb-confirm-delete
-            className="h-5 px-2 rounded-sm bg-destructive/15 text-[10px] text-destructive hover:bg-destructive/25 transition-colors"
+            className="bm-btn bm-btn-danger"
           >
             Close
           </button>
           <button
             type="button"
             onClick={onCancelDelete}
-            className="h-5 px-2 rounded-sm bg-white/[0.04] text-[10px] text-bm-text-secondary hover:bg-white/[0.08] hover:text-bm-text transition-colors"
+            className="bm-btn"
           >
             Cancel
           </button>
@@ -904,13 +903,15 @@ function WorkspaceRow({
                     icon={Plus}
                     label="Add pane"
                     onClick={onAddPane}
+                    primary
                     focusable={false}
                   />
                 )}
                 {onStartRename && (
                   <IconButton
                     icon={Pencil}
-                    label="Rename (F2)"
+                    label="Rename"
+                    shortcut="F2"
                     onClick={onStartRename}
                     focusable={false}
                   />
@@ -919,6 +920,7 @@ function WorkspaceRow({
                   <IconButton
                     icon={Trash2}
                     label="Close workspace"
+                    shortcut="Del"
                     onClick={onRequestDelete}
                     danger
                     focusable={false}
@@ -1002,7 +1004,6 @@ function WorkspaceRow({
                       onClick={() => onClosePane(pane.id)}
                       danger
                       focusable={false}
-                      className="size-4"
                     />
                   </span>
                 )}
@@ -1023,6 +1024,7 @@ function Rail({
   workspaces,
   activeWorkspaceId,
   counts,
+  mod,
   onSelect,
   onExpand,
   onSearch,
@@ -1031,6 +1033,7 @@ function Rail({
   workspaces: WorkspaceItem[]
   activeWorkspaceId: string
   counts: StatusCounts
+  mod: string
   onSelect: (id: string) => void
   onExpand: () => void
   onSearch: () => void
@@ -1047,23 +1050,35 @@ function Rail({
                 type="button"
                 aria-label="Expand sidebar"
                 onClick={onExpand}
-                className="size-6 rounded bg-gradient-to-br from-purple to-violet flex items-center justify-center"
+                className={cn(
+                  "relative size-[22px] rounded-[3px] shrink-0",
+                  "bg-gradient-to-br from-purple to-violet",
+                  "flex items-center justify-center",
+                  // The brand tile is the rail's expand affordance, but nothing
+                  // about a static logo says "clickable" — so it dims on press
+                  // like every other control in the panel.
+                  "transition-opacity duration-100 hover:opacity-85 active:opacity-70"
+                )}
               />
             }
           >
-            <span className="text-[9px] font-bold text-white">BM</span>
+            <span className="text-[9px] font-bold text-white leading-none">
+              BM
+            </span>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-[10px] font-mono">
-            Expand sidebar
+            <span>Expand sidebar</span>
+            <span className="text-bm-text-dim tracking-wide">{mod}B</span>
           </TooltipContent>
         </Tooltip>
 
         <IconButton
           icon={Search}
-          label="Search workspaces (/)"
+          label="Search workspaces"
+          shortcut="/"
           onClick={onSearch}
           side="right"
-          className="size-6"
+          size="lg"
         />
       </div>
 
@@ -1130,11 +1145,13 @@ function Rail({
           2px rule, so collapsing changes the width and nothing else. */}
       <div className="shrink-0 border-t border-bm-border">
         {onCreateWorkspace && (
-          <div className="flex items-center justify-center h-[26px]">
+          <div className="flex items-center justify-center h-[30px]">
             <IconButton
               icon={Plus}
               label="New workspace"
               onClick={onCreateWorkspace}
+              primary
+              size="lg"
               side="right"
             />
           </div>
@@ -1238,9 +1255,9 @@ function ShortcutSheet({
           type="button"
           aria-label="Close shortcuts"
           onClick={onClose}
-          className="ml-auto text-bm-text-dim hover:text-bm-text transition-colors"
+          className="bm-ib size-4 ml-auto"
         >
-          <X className="size-3" />
+          <X className="size-3 relative" />
         </button>
       </div>
       <dl className="grid gap-1">
@@ -1791,6 +1808,7 @@ export function BridgeMindSidebar({
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
             counts={counts}
+            mod={mod}
             onSelect={onSelect}
             onExpand={() => applyRailed(false)}
             onSearch={focusSearch}
@@ -1801,7 +1819,7 @@ export function BridgeMindSidebar({
             {/* ---- brand + rail toggle ---- */}
             {/* Every band in this panel starts on the same 8px gutter as a tree
                 row, so the left edge reads as one column rather than four. */}
-            <div className="flex items-center gap-2 pl-2 pr-1.5 h-10 border-b border-bm-border shrink-0">
+            <div className="flex items-center gap-2 pl-2 pr-1 h-10 border-b border-bm-border shrink-0">
               <div className="size-[18px] rounded-[3px] bg-gradient-to-br from-purple to-violet flex items-center justify-center shrink-0">
                 <span className="text-[8px] font-bold text-white leading-none">
                   BM
@@ -1813,20 +1831,24 @@ export function BridgeMindSidebar({
                   v1.0
                 </span>
               </span>
-              <span data-sb-help-toggle className="inline-flex shrink-0">
+              <span className="flex items-center gap-px shrink-0">
+                <span data-sb-help-toggle className="inline-flex">
+                  <IconButton
+                    icon={Keyboard}
+                    label="Keyboard shortcuts"
+                    side="bottom"
+                    active={showHelp}
+                    onClick={() => setShowHelp((v) => !v)}
+                  />
+                </span>
                 <IconButton
-                  icon={Keyboard}
-                  label="Keyboard shortcuts"
+                  icon={ChevronsLeft}
+                  label="Collapse sidebar"
+                  shortcut={`${mod}B`}
                   side="bottom"
-                  active={showHelp}
-                  onClick={() => setShowHelp((v) => !v)}
+                  onClick={() => applyRailed(true)}
                 />
               </span>
-              <IconButton
-                icon={ChevronsLeft}
-                label={`Collapse sidebar (${mod}+B)`}
-                onClick={() => applyRailed(true)}
-              />
             </div>
 
             {/* ---- search ---- */}
@@ -1866,9 +1888,11 @@ export function BridgeMindSidebar({
                     type="button"
                     aria-label="Clear search"
                     onClick={() => setQuery("")}
-                    className="text-bm-text-dim hover:text-bm-text shrink-0 transition-colors"
+                    // Paints at 16px to sit inside the 26px field, but carries
+                    // the shared slop so it is not a pixel hunt.
+                    className="bm-ib size-4"
                   >
-                    <X className="size-3" />
+                    <X className="size-3 relative" />
                   </button>
                 ) : (
                   <kbd className="shrink-0 pr-0.5 text-[10px] font-mono text-bm-text-dim/60 leading-none">
@@ -1881,7 +1905,10 @@ export function BridgeMindSidebar({
             {/* ---- section header ---- */}
             {/* The label sits on a hairline that runs to the panel edge: it
                 separates search from tree without stacking another border. */}
-            <div className="flex items-center gap-1.5 pl-2 pr-1.5 h-[22px] shrink-0">
+            {/* 26px, not 22px: the band has to seat a real control. The old
+                height only fit a 16px glyph box, which is how the panel's
+                primary action ended up smaller than the text beside it. */}
+            <div className="flex items-center gap-1.5 pl-2 pr-1 h-[26px] shrink-0">
               <span className="text-[9px] font-medium text-bm-text-dim uppercase tracking-[0.14em] leading-none">
                 Workspaces
               </span>
@@ -1895,18 +1922,18 @@ export function BridgeMindSidebar({
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="text-[9px] font-mono uppercase tracking-wider text-bm-link/80 hover:text-bm-link transition-colors"
+                  className="shrink-0 px-1 text-[9px] font-mono uppercase tracking-wider text-bm-link/80 hover:text-bm-link transition-colors"
                 >
                   clear
                 </button>
               )}
-              <span className="ml-auto flex items-center gap-0.5">
+              <span className="ml-auto flex items-center gap-px">
                 {workspaces.length > 1 && !filtering && (
                   <IconButton
                     icon={allExpanded ? ChevronsDownUp : ChevronsUpDown}
                     label={allExpanded ? "Collapse all" : "Expand all"}
                     onClick={() => setAll(!allExpanded)}
-                    className="size-4"
+                    side="bottom"
                   />
                 )}
                 {onCreateWorkspace && (
@@ -1914,7 +1941,8 @@ export function BridgeMindSidebar({
                     icon={Plus}
                     label="New workspace"
                     onClick={onCreateWorkspace}
-                    className="size-4"
+                    primary
+                    side="bottom"
                   />
                 )}
               </span>
@@ -1957,7 +1985,7 @@ export function BridgeMindSidebar({
                       <button
                         type="button"
                         onClick={onCreateWorkspace}
-                        className="mt-2 inline-flex items-center gap-1 h-6 px-2 rounded-sm border border-bm-border text-[10px] text-bm-text-secondary hover:text-bm-text hover:border-bm-text-dim transition-colors"
+                        className="bm-btn mt-2"
                       >
                         <Plus className="size-3" />
                         New workspace
@@ -1981,7 +2009,7 @@ export function BridgeMindSidebar({
                     <button
                       type="button"
                       onClick={resetFilters}
-                      className="mt-2 h-6 px-2 rounded-sm border border-bm-border text-[10px] text-bm-text-secondary hover:text-bm-text hover:border-bm-text-dim transition-colors"
+                      className="bm-btn mt-2"
                     >
                       Reset filters
                     </button>
