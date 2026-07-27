@@ -88,13 +88,17 @@ export async function startNextServer(opts: {
   child.on("exit", (code) => {
     exited = { code }
   })
+  // Read through a function: control-flow analysis cannot see the assignment
+  // inside the listener and would otherwise narrow `exited` to `null` here.
+  const lastExit = (): { code: number | null } | null => exited
 
   try {
     await waitForServer(url, 45_000)
   } catch (err) {
-    if (exited) {
+    const crash = lastExit()
+    if (crash) {
       throw new Error(
-        `Next server exited early with code ${exited.code}. ${String(err)}`
+        `Next server exited early with code ${crash.code}. ${String(err)}`
       )
     }
     child.kill()

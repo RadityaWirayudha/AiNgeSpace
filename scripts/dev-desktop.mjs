@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const DEV_URL = process.env.BM_DEV_URL ?? "http://localhost:3000"
+const DEV_PORT = process.env.BM_DEV_PORT ?? "3000"
+const DEV_URL = process.env.BM_DEV_URL ?? `http://localhost:${DEV_PORT}`
 const npx = process.platform === "win32" ? "npx.cmd" : "npx"
 
 const children = []
@@ -26,28 +27,45 @@ function shutdown(code = 0) {
 process.on("SIGINT", () => shutdown(0))
 process.on("SIGTERM", () => shutdown(0))
 
+async function isUp() {
+  try {
+    await fetch(DEV_URL, { method: "GET", redirect: "manual" })
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function waitForDevServer(timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (shuttingDown) return false
-    try {
-      await fetch(DEV_URL, { method: "GET", redirect: "manual" })
-      return true
-    } catch {
-      await new Promise((r) => setTimeout(r, 400))
-    }
+    if (await isUp()) return true
+    await new Promise((r) => setTimeout(r, 400))
   }
   return false
 }
 
-console.log("[dev:desktop] starting next dev…")
-const next = spawn(npx, ["next", "dev"], {
-  cwd: root,
-  stdio: "inherit",
-  shell: process.platform === "win32",
-})
-children.push(next)
-next.on("exit", (code) => shutdown(code ?? 0))
+// Reuse a dev server that is already listening. Spawning a second `next dev`
+// here would make Next fall back to :3001 while this script kept waiting on
+// :3000 — Electron would then load whatever stranger owns :3000, and two dev
+// servers would fight over the same `.next` cache directory.
+const reused = await isUp()
+
+if (reused) {
+  console.log(`[dev:desktop] reusing the dev server already on ${DEV_URL}`)
+} else {
+  console.log(`[dev:desktop] starting next dev on port ${DEV_PORT}…`)
+  // `-p` is explicit on purpose: without it Next silently picks another port
+  // when this one is taken, and the URL below would point at the wrong app.
+  const next = spawn(npx, ["next", "dev", "-p", DEV_PORT], {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  })
+  children.push(next)
+  next.on("exit", (code) => shutdown(code ?? 0))
+}
 
 console.log("[dev:desktop] compiling electron/…")
 const tsc = spawn(npx, ["tsc", "-p", "tsconfig.electron.json"], {

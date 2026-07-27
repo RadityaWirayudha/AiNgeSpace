@@ -18,7 +18,17 @@
 /out/
 
 # production
-/build
+# `/build/*` rather than `/build`: git does not descend into an excluded
+# directory, so a `!` exception inside one is never reached.
+/build/*
+# The app icon is a source asset — electron-builder reads it from
+# buildResources, so a fresh clone without it fails `npm run build:desktop`.
+# Regenerate with `node scripts/make-icon.mjs`.
+!/build/icon.png
+
+# desktop build output
+/dist
+/dist-electron
 
 # misc
 .DS_Store

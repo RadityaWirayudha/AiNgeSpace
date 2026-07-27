@@ -111,7 +111,7 @@ function forwardDeepLink(rawUrl: string) {
   // Registered so a browser-based auth callback can reach the app. There is no
   // renderer consumer yet — see DESKTOP_STATUS.md §Langkah 3.
   log("deep link:", rawUrl)
-  mainWindow?.webContents.send("bm:deep-link", rawUrl)
+  mainWindow?.webContents.send(CH.deepLink, rawUrl)
 }
 
 async function boot() {
