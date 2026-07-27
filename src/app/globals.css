@@ -69,6 +69,12 @@
   --color-bm-live: #e0813c;
   --color-bm-link: #6ea8fe;
   --color-bm-warning: #e0c34c;
+
+  /* Selection. Not a status: it says "this is the workspace you are looking
+     at", which is a different question from "is anything running in it".
+     Keeping it off orange is what lets a selected-but-idle row and a live row
+     stay tellable apart at a glance. */
+  --color-bm-select: #3ecf8e;
 }
 
 :root {
@@ -116,6 +122,7 @@
   --bm-live: #e0813c;
   --bm-link: #6ea8fe;
   --bm-warning: #e0c34c;
+  --bm-select: #3ecf8e;
 }
 
 @layer base {
@@ -233,13 +240,101 @@
   background: var(--bm-row-hover);
 }
 
+/* Selection is a tinted surface plus a hairline ring, not just a lighter grey.
+   At 184px the row is the only thing on screen carrying "you are here", and a
+   two-step greyscale difference was losing that fight against the hover state
+   sitting one step below it. The ring is inset so the row stays full-bleed and
+   the accent bar keeps sitting flush with the panel edge. */
 .bm-row-active,
 .bm-row-active:hover {
-  background: var(--bm-row-active);
+  background: color-mix(in srgb, var(--bm-select) 9%, var(--bm-row-active));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--bm-select) 18%, transparent);
 }
 
 .bm-row-actions {
   background: inherit;
+}
+
+/* ------------------------------------------------------------------
+   WORKSPACE TILE
+   Identity, not status. A column of names in one grey is a wall of text; a
+   stable colour + letter per workspace is what makes "the blue one" findable
+   before the eye has finished reading. The hue is derived from the id, so it
+   survives a rename and never has to be stored.
+-------------------------------------------------------------------*/
+
+.bm-ws-tile {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--bm-tone);
+  background: color-mix(in srgb, var(--bm-tone) 15%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bm-tone) 26%, transparent);
+  transition:
+    background-color 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.bm-ws-tile-lg {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+/* The selected workspace's tile lifts with the row instead of staying flat, so
+   the two read as one object. */
+.bm-row-active .bm-ws-tile,
+.bm-ws-tile[data-active="1"] {
+  background: color-mix(in srgb, var(--bm-tone) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bm-tone) 44%, transparent);
+}
+
+/* ------------------------------------------------------------------
+   COUNT PILL
+   The pane count is a quantity, not an alert. It rests as a neutral pill and
+   only borrows a colour when there is something to say: orange while panes are
+   live, selection green while the row is the one in view.
+-------------------------------------------------------------------*/
+
+.bm-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 17px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--bm-text-dim);
+  font-size: 9px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition:
+    color 0.1s ease,
+    background-color 0.1s ease,
+    opacity 0.1s ease;
+}
+
+.bm-count[data-tone="select"] {
+  background: color-mix(in srgb, var(--bm-select) 16%, transparent);
+  color: var(--bm-select);
+}
+
+.bm-count[data-tone="live"] {
+  background: color-mix(in srgb, var(--bm-live) 16%, transparent);
+  color: var(--bm-live);
 }
 
 /* ------------------------------------------------------------------

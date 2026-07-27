@@ -169,6 +169,71 @@ function toneFor(status: string): string {
   }
 }
 
+/** Identity hues. Deliberately kept off orange, red and yellow: those three
+ *  already mean live, error and warning everywhere else in the app, and a
+ *  workspace that merely happens to hash to amber must not read as a warning. */
+const TONES = [
+  "#a78bfa",
+  "#60a5fa",
+  "#34d399",
+  "#22d3ee",
+  "#c084fc",
+  "#818cf8",
+] as const
+
+/** Derived from the id, not the index: the colour a user has learnt to
+ *  associate with a workspace survives a reorder, a rename, and a reload. */
+function hueFor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  return TONES[hash % TONES.length]
+}
+
+/** The tile carries two facts in one 18px slot — which workspace this is
+ *  (colour + letter) and whether anything in it needs attention (corner dot).
+ *  Idle stays dotless: a badge on every row is a badge on none. */
+function WorkspaceTile({
+  id,
+  label,
+  status,
+  active = false,
+  large = false,
+  className,
+}: {
+  id: string
+  label: string
+  status: string
+  active?: boolean
+  large?: boolean
+  className?: string
+}) {
+  return (
+    <span
+      aria-hidden
+      data-active={active ? "1" : undefined}
+      style={{ "--bm-tone": hueFor(id) } as React.CSSProperties}
+      className={cn("bm-ws-tile", large && "bm-ws-tile-lg", className)}
+    >
+      {label}
+      {status !== "idle" && (
+        <span
+          className={cn(
+            "absolute -top-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-bm-bg",
+            toneFor(status),
+            status === "running" && "bm-dot-live"
+          )}
+        />
+      )}
+    </span>
+  )
+}
+
+/** One character for the 18px tile. Two would have to be set at 7px to fit,
+ *  which is smaller than the row's own text and reads as noise. */
+function letterFor(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "·"
+}
+
 function initials(name: string): string {
   const words = name.trim().split(/[\s_\-./]+/).filter(Boolean)
   if (words.length === 0) return "··"
@@ -692,6 +757,7 @@ function WorkspaceRow({
   const runningCount = allPanes.filter((p) => p.status === "running").length
   const showChildren = expanded && panes.length > 0
   const rowKey = `ws:${workspace.id}`
+  const showClose = isActive && Boolean(onRequestDelete)
 
   if (confirmingDelete) {
     return (
@@ -793,21 +859,27 @@ function WorkspaceRow({
           isActive ? "text-bm-text" : "text-bm-text-secondary"
         )}
       >
-        {/* Selection is carried by a neutral bar — except when the workspace is
-            live, where orange is doing its one job (referensi.md §2). */}
+        {/* Live wins the bar: "something is running in here" outranks "this is
+            the one you are looking at", and orange keeps its single meaning
+            (referensi.md §2). Otherwise the bar carries selection. */}
         {isActive && (
           <span
             aria-hidden
             className={cn(
               "absolute left-0 inset-y-0 z-10 w-[2px]",
-              status === "running" ? "bg-bm-live" : "bg-bm-text/60"
+              status === "running" ? "bg-bm-live" : "bg-bm-select"
             )}
           />
         )}
 
         {renaming ? (
-          <div className="relative flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1">
-            <StatusDot status={status} />
+          <div className="relative flex items-center gap-1.5 flex-1 min-w-0 pl-[22px] pr-2 py-1">
+            <WorkspaceTile
+              id={workspace.id}
+              label={letterFor(workspace.name)}
+              status={status}
+              active={isActive}
+            />
             <RenameInput
               initial={workspace.name}
               onCommit={(name) => onCommitRename?.(name)}
@@ -854,45 +926,69 @@ function WorkspaceRow({
                 )}
               </span>
 
-              <span className="w-3 shrink-0 flex items-center justify-center">
-                <StatusDot status={status} />
-              </span>
+              <WorkspaceTile
+                id={workspace.id}
+                label={letterFor(workspace.name)}
+                status={status}
+                active={isActive}
+              />
 
               <span
                 className={cn(
-                  "truncate text-[11px] leading-none flex-1 pl-1.5 pt-px",
-                  isActive ? "font-medium" : "font-normal"
+                  "truncate text-[11px] leading-none flex-1 pl-2 pt-px",
+                  isActive ? "font-medium text-bm-text" : "font-normal"
                 )}
               >
                 <Highlight text={workspace.name} query={query} />
               </span>
             </button>
 
-            {/* A bare tabular number, right-aligned in a fixed column. The old
-                pill read as a badge demanding attention; the running count
-                only borrows the accent for the digit that is actually live. */}
-            <span
-              className={cn(
-                "relative shrink-0 pl-1 text-right text-[9px] font-mono tabular-nums leading-none",
-                "transition-opacity duration-100",
-                "group-hover/row:opacity-0 group-focus-within/row:opacity-0",
-                isActive ? "text-bm-text-secondary" : "text-bm-text-dim"
+            {/* Count and close sit in the flow; the hover cluster floats over
+                the name. A 184px sidebar cannot spare 60px of permanently
+                reserved chrome, and the name is what the user is scanning. */}
+            <span className="relative flex items-center gap-1 shrink-0 pl-1">
+              <span
+                data-tone={
+                  runningCount > 0 ? "live" : isActive ? "select" : undefined
+                }
+                title={
+                  runningCount > 0
+                    ? `${runningCount} running of ${workspace.count} pane${
+                        workspace.count === 1 ? "" : "s"
+                      }`
+                    : `${workspace.count} pane${
+                        workspace.count === 1 ? "" : "s"
+                      }`
+                }
+                className={cn(
+                  "bm-count",
+                  "group-hover/row:opacity-0 group-focus-within/row:opacity-0"
+                )}
+              >
+                {workspace.count}
+              </span>
+
+              {/* The selected row keeps its close button on screen. It is the
+                  one workspace the user is demonstrably done with or working
+                  in, and hunting for a hover target to leave it is the kind of
+                  friction a keyboard-first panel should not have. */}
+              {showClose && (
+                <IconButton
+                  icon={X}
+                  label="Close workspace"
+                  shortcut="Del"
+                  onClick={() => onRequestDelete?.()}
+                  danger
+                  focusable={false}
+                />
               )}
-            >
-              {runningCount > 0 && (
-                <span className="text-bm-live">{runningCount}</span>
-              )}
-              {runningCount > 0 && <span className="opacity-50">/</span>}
-              {workspace.count}
             </span>
 
-            {/* Actions float above the row instead of sitting in the flow: a
-                184px sidebar cannot spare 60px of permanently reserved chrome,
-                and the workspace name is what the user is scanning for. */}
             {(onAddPane || onStartRename || onRequestDelete) && (
               <span
                 className={cn(
-                  "bm-row-actions absolute right-1.5 top-0 bottom-0 z-10 pl-2",
+                  "bm-row-actions absolute top-0 bottom-0 z-10 pl-2",
+                  showClose ? "right-[26px]" : "right-1.5",
                   "flex items-center gap-0.5",
                   "opacity-0 transition-opacity duration-100",
                   "group-hover/row:opacity-100 focus-within:opacity-100"
@@ -916,7 +1012,9 @@ function WorkspaceRow({
                     focusable={false}
                   />
                 )}
-                {onRequestDelete && (
+                {/* Skipped when the row already shows a persistent ×: two
+                    controls for one command in a 20px span is a misclick. */}
+                {onRequestDelete && !showClose && (
                   <IconButton
                     icon={Trash2}
                     label="Close workspace"
@@ -962,7 +1060,7 @@ function WorkspaceRow({
                     aria-hidden
                     className={cn(
                       "absolute left-[15px] inset-y-0 z-[6] w-[2px]",
-                      pane.status === "running" ? "bg-bm-live" : "bg-bm-text/60"
+                      pane.status === "running" ? "bg-bm-live" : "bg-bm-select"
                     )}
                   />
                 )}
@@ -1098,35 +1196,32 @@ function Rail({
                     aria-current={isActive ? "true" : undefined}
                     aria-label={ws.name}
                     className={cn(
-                      // One line, one glyph. The pane count moved to the
+                      // One tile, one glyph. The pane count moved to the
                       // tooltip: two stacked numbers in a 48px rail read as
-                      // clutter, and the status dot already answers the
-                      // question the rail exists to answer.
-                      "relative size-7 rounded-[3px] flex items-center justify-center shrink-0",
-                      "text-[9px] font-mono tracking-wide transition-colors duration-100",
-                      isActive
-                        ? "bg-white/[0.09] text-bm-text"
-                        : "text-bm-text-dim hover:bg-white/[0.05] hover:text-bm-text-secondary"
+                      // clutter, and the tile's own status dot already answers
+                      // the question the rail exists to answer.
+                      "relative flex items-center justify-center shrink-0 rounded-[5px]",
+                      "transition-opacity duration-100",
+                      isActive ? "opacity-100" : "opacity-70 hover:opacity-100"
                     )}
                   />
                 }
               >
-                <span>{initials(ws.name)}</span>
-                {status !== "idle" && (
-                  <span
-                    className={cn(
-                      "absolute -top-px -right-px size-1.5 rounded-full ring-2 ring-bm-bg",
-                      toneFor(status),
-                      status === "running" && "bm-dot-live"
-                    )}
-                  />
-                )}
+                {/* Same tile as the expanded panel, one size up — collapsing
+                    the sidebar must not change what a workspace looks like. */}
+                <WorkspaceTile
+                  id={ws.id}
+                  label={initials(ws.name)}
+                  status={status}
+                  active={isActive}
+                  large
+                />
                 {isActive && (
                   <span
                     aria-hidden
                     className={cn(
-                      "absolute -left-1.5 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full",
-                      status === "running" ? "bg-bm-live" : "bg-bm-text/70"
+                      "absolute -left-2 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full",
+                      status === "running" ? "bg-bm-live" : "bg-bm-select"
                     )}
                   />
                 )}

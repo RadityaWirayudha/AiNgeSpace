@@ -79,6 +79,8 @@ Bukan aplikasi yang fokus pada visual kosong atau whitespace besar.
 | `--text-link` | `#6EA8FE` | Path, filename, reference |
 | `--text-warning` | `#E0C34C` | Warning |
 | `--accent-sidebar` | `#5B8DEF` | Sidebar active item |
+| `--bm-select` | `#3ECF8E` | Sidebar selection (row aktif, badge, accent bar) |
+| *workspace tones* | violet / blue / teal / cyan / purple / indigo | Tile identitas workspace (di-hash dari id) |
 
 ---
 
@@ -105,7 +107,21 @@ Gunakan warna hanya untuk status.
 | 🟦 Blue | Link / Path / File |
 | 🟨 Yellow | Warning |
 
-> Jangan menambahkan aksen warna lain.
+> Jangan menambahkan aksen warna lain **untuk status**.
+
+### Pengecualian: Selection & Identity (sidebar)
+
+Dua hal berikut bukan status, jadi tidak boleh memakai oranye/kuning/merah —
+kalau dipakai, "workspace yang sedang dilihat" jadi tidak bisa dibedakan dari
+"workspace yang sedang jalan".
+
+| Color | Meaning |
+|---------|---------|
+| 🟩 Green `#3ECF8E` | Selection — baris sidebar yang sedang dibuka |
+| 🟪🟦 Workspace tone | Identitas workspace (tile 18px, warna di-hash dari id) |
+
+Aturan prioritas pada baris sidebar: **live (oranye) > selected (hijau) >
+netral**. Accent bar dan badge mengikuti urutan ini.
 
 ---
 
