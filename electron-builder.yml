@@ -1,0 +1,56 @@
+appId: com.bridgemind.aingespace
+productName: BridgeMind
+copyright: Copyright © 2026 BridgeMind
+
+directories:
+  output: dist
+  buildResources: build
+
+# Explicit allow-list. Without it electron-builder would pull every production
+# dependency (next, react, clerk, supabase…) into the asar even though the web
+# app already runs from the standalone bundle in extraResources.
+files:
+  - dist-electron/**/*
+  - package.json
+  - node_modules/node-pty/**/*
+  - "!node_modules/node-pty/src/**"
+  - "!node_modules/node-pty/deps/**"
+  - "!node_modules/node-pty/scripts/**"
+  - "!node_modules/node-pty/binding.gyp"
+  - "!**/.env*"
+
+extraResources:
+  - from: .next/standalone
+    to: app-next
+    filter:
+      - "**/*"
+      # Secrets never ship inside the installer — see DESKTOP_STATUS.md.
+      - "!.env*"
+
+# node-pty loads a real .node binary plus conpty.dll / OpenConsole.exe. Those
+# cannot be read from inside an asar archive, so they must stay unpacked. This
+# is the single most common reason a packaged Electron terminal works in dev and
+# dies in production.
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+
+# The prebuilt binaries are N-API, so they are ABI-stable across Node and
+# Electron. Rebuilding would require MSVC, which this machine does not have.
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: BridgeMind-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: BridgeMind
