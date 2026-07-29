@@ -61,6 +61,8 @@ function createWindow(): BrowserWindow {
 
   win.once("ready-to-show", () => win.show())
 
+  win.webContents.on("did-finish-load", flushDeepLinks)
+
   // Anything that is not the app itself belongs in the user's real browser —
   // in particular OAuth screens, which must never render inside the shell.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -107,11 +109,31 @@ function registerIpc(manager: PtyManager) {
   })
 }
 
+/** URLs that arrived before a renderer existed to receive them. */
+const queuedLinks: string[] = []
+
+function flushDeepLinks() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  while (queuedLinks.length > 0) {
+    const url = queuedLinks.shift()
+    if (url) mainWindow.webContents.send(CH.deepLink, url)
+  }
+}
+
 function forwardDeepLink(rawUrl: string) {
-  // Registered so a browser-based auth callback can reach the app. There is no
-  // renderer consumer yet — see DESKTOP_STATUS.md §Langkah 3.
+  // Carries the sign-in ticket back from the browser (see the /desktop-auth
+  // page). `webContents.send` on a page that has not finished loading is
+  // dropped silently, and a cold start *through* the protocol handler is
+  // exactly that case, so anything that cannot be delivered now is queued and
+  // replayed from `did-finish-load`.
   log("deep link:", rawUrl)
-  mainWindow?.webContents.send(CH.deepLink, rawUrl)
+  queuedLinks.push(rawUrl)
+  flushDeepLinks()
+}
+
+/** Windows hands the URL to a cold-started app as a plain argv entry. */
+function deepLinkFromArgv(argv: string[]): string | undefined {
+  return argv.find((a) => a.startsWith(`${PROTOCOL}://`))
 }
 
 async function boot() {
@@ -173,7 +195,7 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
     }
-    const link = argv.find((a) => a.startsWith(`${PROTOCOL}://`))
+    const link = deepLinkFromArgv(argv)
     if (link) forwardDeepLink(link)
   })
 
@@ -189,6 +211,10 @@ if (!app.requestSingleInstanceLock()) {
     } else {
       app.setAsDefaultProtocolClient(PROTOCOL)
     }
+    // A cold start triggered by clicking the callback link carries the URL in
+    // argv rather than through `second-instance`.
+    const initialLink = deepLinkFromArgv(process.argv)
+    if (initialLink) queuedLinks.push(initialLink)
     return boot()
   })
 

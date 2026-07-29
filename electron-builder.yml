@@ -19,13 +19,36 @@ files:
   - "!node_modules/node-pty/binding.gyp"
   - "!**/.env*"
 
+# The whole web app ships here, and it takes two entries to get it across.
+#
+# 1. `**/*` does not match dot-prefixed entries (electron-builder builds its
+#    Minimatch without `dot`), so the standalone bundle's own `.next/` — every
+#    compiled route, the edge proxy chunks, the manifests — was silently
+#    dropped. It has to be named explicitly.
+# 2. `node_modules` cannot be carried by this matcher at all: `createFilter` in
+#    app-builder-lib/out/util/filter.js returns false for a relative path of
+#    exactly "node_modules", before any pattern is consulted, so the directory
+#    is pruned and no glob can bring it back. A second entry rooted *inside*
+#    node_modules sidesteps that check, because then no relative path is ever
+#    equal to "node_modules".
+#
+# Both halves matter: without them app-next/ holds nothing but server.js and the
+# packaged app dies with "Cannot find module 'next'". Verify after any change:
+#   ls -a dist/win-unpacked/resources/app-next   # must list .next and node_modules
 extraResources:
   - from: .next/standalone
     to: app-next
     filter:
       - "**/*"
-      # Secrets never ship inside the installer — see DESKTOP_STATUS.md.
-      - "!.env*"
+      - ".next/**/*"
+      # Secrets never ship inside the installer — see DESKTOP_HANDOFF_3.md §5.
+      - "!**/.env*"
+  - from: .next/standalone/node_modules
+    to: app-next/node_modules
+    filter:
+      - "**/*"
+      - ".*/**/*"
+      - "!**/.env*"
 
 # node-pty loads a real .node binary plus conpty.dll / OpenConsole.exe. Those
 # cannot be read from inside an asar archive, so they must stay unpacked. This
@@ -45,12 +68,18 @@ win:
     - target: portable
       arch: [x64]
   icon: build/icon.png
-  artifactName: BridgeMind-${version}-${arch}.${ext}
 
+# NSIS and portable both emit `.exe`, so a single `win.artifactName` makes the
+# second target overwrite the first — the run ends with one file that looks like
+# the installer but is actually the portable build. Name them apart.
 nsis:
+  artifactName: BridgeMind-Setup-${version}-${arch}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: BridgeMind
+
+portable:
+  artifactName: BridgeMind-Portable-${version}-${arch}.${ext}

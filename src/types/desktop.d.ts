@@ -45,6 +45,13 @@ export interface DesktopBridge {
   terminal: DesktopTerminalApi
   /** Opens a URL in the user's real browser instead of inside the app window. */
   openExternal(url: string): Promise<boolean>
+  /**
+   * Fires for every `aingespace://…` URL the OS hands to the app — currently the
+   * sign-in ticket coming back from the browser. Returns an unsubscribe
+   * function. A link that arrives before the renderer subscribes is buffered by
+   * the main process and replayed on the first subscription.
+   */
+  onDeepLink(cb: (url: string) => void): () => void
 }
 
 declare global {

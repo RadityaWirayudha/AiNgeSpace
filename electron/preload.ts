@@ -9,6 +9,7 @@ import type {
 
 type DataCb = (data: string) => void
 type ExitCb = (payload: TerminalExitPayload) => void
+type LinkCb = (url: string) => void
 
 // One ipcRenderer listener per channel, fanned out here. Registering a listener
 // per terminal would hit Electron's max-listeners warning once a workspace has
@@ -26,6 +27,23 @@ ipcRenderer.on(CH.terminalExit, (_e, id: string, payload: TerminalExitPayload) =
   const subs = exitSubs.get(id)
   if (!subs) return
   for (const cb of subs) cb(payload)
+})
+
+// Deep links are not addressed to a terminal, so they get their own flat set.
+// A link can land before React has mounted the subscriber — the auth callback
+// arrives from a browser the user may have been sitting in for a minute — so an
+// unclaimed URL is held here and replayed to the first subscriber. Without this
+// the sign-in ticket would be dropped and the window would sit there signed out
+// with no error to explain it.
+const linkSubs = new Set<LinkCb>()
+let pendingLink: string | null = null
+
+ipcRenderer.on(CH.deepLink, (_e, url: string) => {
+  if (linkSubs.size === 0) {
+    pendingLink = url
+    return
+  }
+  for (const cb of linkSubs) cb(url)
 })
 
 function subscribe<T extends DataCb | ExitCb>(
@@ -63,6 +81,19 @@ const bridge: DesktopBridge = {
   },
   openExternal: (url: string): Promise<boolean> =>
     ipcRenderer.invoke(CH.openExternal, url),
+  onDeepLink: (cb: LinkCb) => {
+    linkSubs.add(cb)
+    if (pendingLink !== null) {
+      const replay = pendingLink
+      pendingLink = null
+      // Deliver out of band so the caller finishes subscribing (and React
+      // finishes its effect) before the callback runs.
+      queueMicrotask(() => cb(replay))
+    }
+    return () => {
+      linkSubs.delete(cb)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld("bridgemind", bridge)
