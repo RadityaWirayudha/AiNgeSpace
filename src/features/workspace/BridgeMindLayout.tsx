@@ -8,7 +8,11 @@ import {
   CreateWorkspaceDialog,
   type WorkspaceDraft,
 } from "@/components/CreateWorkspaceDialog"
-import { PaneTerminalProvider } from "@/features/terminal/pane-terminal-store"
+import {
+  PaneTerminalProvider,
+  usePaneTerminalStore,
+  countLeaves,
+} from "@/features/terminal/pane-terminal-store"
 import { PaneTerminalManager } from "@/features/terminal/PaneTerminalManager"
 import { cn } from "@/lib/utils"
 
@@ -114,6 +118,7 @@ function BridgeMindInner() {
 
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
+  const { state: paneTermState } = usePaneTerminalStore()
 
   const handleWorkspaceCreated = useCallback((draft: WorkspaceDraft) => {
     // The dialog used to hand back only an id, so the name the user typed and
@@ -300,22 +305,26 @@ function BridgeMindInner() {
               gridFor(visiblePanes.length)
             )}
           >
-            {visiblePanes.map((pane) => (
-              <Pane
-                key={pane.id}
-                title={pane.title}
-                active={pane.id === activePaneId}
-                status={pane.status}
-                progress={pane.progress}
-                pinned={pane.pinned}
-                flush
-                className="h-full min-h-0"
-                expanded={expandedPaneId === pane.id}
-                onToggleExpand={() =>
-                  setExpandedPaneId((cur) => (cur === pane.id ? null : pane.id))
-                }
-                onPin={() => togglePin(pane.id)}
-                onClose={() => closePane(activeWorkspaceId, pane.id)}
+            {visiblePanes.map((pane) => {
+              const tree = paneTermState.trees[pane.id]
+              const leafCount = tree ? countLeaves(tree) : 1
+              return (
+                <Pane
+                  key={pane.id}
+                  title={pane.title}
+                  active={pane.id === activePaneId}
+                  activeRing={leafCount <= 1}
+                  status={pane.status}
+                  progress={pane.progress}
+                  pinned={pane.pinned}
+                  flush
+                  className="h-full min-h-0"
+                  expanded={expandedPaneId === pane.id}
+                  onToggleExpand={() =>
+                    setExpandedPaneId((cur) => (cur === pane.id ? null : pane.id))
+                  }
+                  onPin={() => togglePin(pane.id)}
+                  onClose={() => closePane(activeWorkspaceId, pane.id)}
                 footer={
                   <div className="flex items-center justify-between w-full gap-2">
                     <span className="flex items-center gap-1.5 min-w-0">
@@ -345,7 +354,8 @@ function BridgeMindInner() {
                   <PaneTerminalManager paneId={pane.id} />
                 </div>
               </Pane>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

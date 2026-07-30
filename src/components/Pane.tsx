@@ -18,6 +18,10 @@ interface PaneHeaderAction {
 interface PaneProps {
   title: string
   active?: boolean
+  /** When false, the active orange/live ring is not painted on the pane's
+   *  outer border. Use when a pane contains multiple split children so the
+   *  active highlight can be delegated to a single child instead. */
+  activeRing?: boolean
   /** Real agent state. Drives the header dot independently of selection. */
   status?: "running" | "idle" | "warning" | "error"
   progress?: number
@@ -81,6 +85,7 @@ function HeaderButton({
 export function Pane({
   title,
   active = false,
+  activeRing = true,
   status = "idle",
   progress,
   headerActions,
@@ -99,7 +104,7 @@ export function Pane({
     <div
       className={cn(
         "bm-pane group",
-        active && "bm-pane-active",
+        active && activeRing && "bm-pane-active",
         expanded && "rounded-none",
         className
       )}

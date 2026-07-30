@@ -208,7 +208,12 @@ function TerminalLeafView({
 
   return (
     <div
-      className="flex flex-col h-full min-h-0 min-w-0 overflow-hidden"
+      className={cn(
+        "flex flex-col h-full min-h-0 min-w-0 overflow-hidden",
+        isActive &&
+          leafCount > 1 &&
+          "border border-[color:var(--bm-live)] [box-shadow:inset_0_0_0_1px_var(--bm-live)] transition-[border-color,box-shadow] duration-150 ease-out"
+      )}
       onClick={() => setActive(node.terminalId)}
     >
       <div
