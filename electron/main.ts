@@ -177,7 +177,7 @@ async function boot() {
       "data:text/html;charset=utf-8," +
         encodeURIComponent(
           `<body style="margin:0;background:${APP_BG};color:#d4d4d8;font:13px ui-monospace,monospace;padding:32px">
-           <p style="color:#e0813c">BridgeMind could not start its local server.</p>
+           <p style="color:#a855f7">BridgeMind could not start its local server.</p>
            <pre style="white-space:pre-wrap;color:#8a8a92">${message.replace(/[<&]/g, "")}</pre>
            </body>`
         )

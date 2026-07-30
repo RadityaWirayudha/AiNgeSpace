@@ -25,8 +25,8 @@ const BANNER = [
 ]
 
 const DIM = "\x1b[38;2;98;98;106m"
-/** "live" orange from referensi.md §2 — reserved for things that need attention. */
-const LIVE = "\x1b[38;2;224;129;60m"
+/** "live" purple — reserved for things that need attention. */
+const LIVE = "\x1b[38;2;168;85;247m"
 const RESET = "\x1b[0m"
 
 /** Resolve the CSS custom property to a real font stack — xterm measures glyphs
@@ -121,7 +121,7 @@ function attachPty(
  * any future web build still look and behave the way they did.
  */
 function attachMockShell(term: Terminal): () => void {
-  const prompt = "\x1b[38;2;224;129;60m❯\x1b[0m "
+  const prompt = "\x1b[38;2;168;85;247m❯\x1b[0m "
   let line = ""
   const history: string[] = []
   let historyIdx = -1
@@ -258,9 +258,9 @@ export function TerminalPanel({
       theme: {
         background: "#09090b",
         foreground: "#d4d4d8",
-        cursor: "#e0813c",
+        cursor: "#a855f7",
         cursorAccent: "#09090b",
-        selectionBackground: "rgba(224, 129, 60, 0.25)",
+        selectionBackground: "rgba(168, 85, 247, 0.25)",
         selectionForeground: "#fafafa",
         black: "#18181b",
         red: "#ef4444",

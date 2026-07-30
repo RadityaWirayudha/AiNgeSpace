@@ -66,7 +66,7 @@
   --color-bm-text-dim: #62626a;
 
   /* Status — the only three accents allowed (see referensi.md §2). */
-  --color-bm-live: #e0813c;
+  --color-bm-live: #a855f7;
   --color-bm-link: #6ea8fe;
   --color-bm-warning: #e0c34c;
 
@@ -119,7 +119,7 @@
   --bm-text: #e8e8ea;
   --bm-text-secondary: #8a8a90;
   --bm-text-dim: #62626a;
-  --bm-live: #e0813c;
+  --bm-live: #a855f7;
   --bm-link: #6ea8fe;
   --bm-warning: #e0c34c;
   --bm-select: #3ecf8e;
