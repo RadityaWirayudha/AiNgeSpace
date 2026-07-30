@@ -91,7 +91,13 @@ tsc.on("exit", async (code) => {
     cwd: root,
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: { ...process.env, BM_DEV_URL: DEV_URL },
+    // ELECTRON_ENABLE_LOGGING is not optional on Windows: electron.exe is built
+    // for the GUI subsystem, so without it every `console.log` from the main
+    // process is discarded. That silently hides the `[bridgemind] deep link: …`
+    // line, which is the first thing to check when desktop sign-in misbehaves —
+    // its absence reads as "the deep link never arrived" when in fact only the
+    // logging was missing.
+    env: { ...process.env, BM_DEV_URL: DEV_URL, ELECTRON_ENABLE_LOGGING: "1" },
   })
   children.push(electron)
   electron.on("exit", (c) => shutdown(c ?? 0))

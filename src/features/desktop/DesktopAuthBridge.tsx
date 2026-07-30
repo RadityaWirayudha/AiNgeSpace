@@ -52,6 +52,10 @@ export function DesktopAuthBridge() {
       try {
         url = new URL(raw)
       } catch {
+        // Logged rather than swallowed: a deep link that arrives and is then
+        // discarded in silence looks exactly like one that never arrived, and
+        // the two have completely different causes.
+        console.warn("[desktop-auth] unparseable deep link:", raw)
         return
       }
       // Ignore any other deep link the app may grow later.
@@ -61,6 +65,8 @@ export function DesktopAuthBridge() {
         setStatus("exchanging")
         setError(null)
         setPendingTicket(ticket)
+      } else {
+        console.warn("[desktop-auth] deep link carried no ticket:", url.pathname)
       }
     })
   }, [desktop])
@@ -70,31 +76,36 @@ export function DesktopAuthBridge() {
     let cancelled = false
     const ticket = pendingTicket
 
+    // The pill can only show one short line; the console keeps the full reason,
+    // and with ELECTRON_ENABLE_LOGGING set by `dev:desktop` it reaches the
+    // terminal instead of dying inside the renderer.
+    const fail = (stage: string, reason: string) => {
+      console.error(`[desktop-auth] ${stage} failed:`, reason)
+      setStatus("error")
+      setError(reason)
+      setPendingTicket(null)
+    }
+
     void (async () => {
       const attempt = await signIn.ticket({ ticket })
       if (cancelled) return
       if (attempt.error) {
-        setStatus("error")
-        setError(attempt.error.message)
-        setPendingTicket(null)
+        fail("ticket exchange", attempt.error.message)
         return
       }
       // A ticket cannot satisfy a second factor, so anything short of
       // `complete` is a dead end rather than a step to continue from here.
       if (signIn.status !== "complete") {
-        setStatus("error")
-        setError(`Sign-in stopped at "${signIn.status}".`)
-        setPendingTicket(null)
+        fail("ticket exchange", `Sign-in stopped at "${signIn.status}".`)
         return
       }
       const finalized = await signIn.finalize()
       if (cancelled) return
       if (finalized.error) {
-        setStatus("error")
-        setError(finalized.error.message)
-      } else {
-        setStatus("idle")
+        fail("finalize", finalized.error.message)
+        return
       }
+      setStatus("idle")
       setPendingTicket(null)
     })()
 
