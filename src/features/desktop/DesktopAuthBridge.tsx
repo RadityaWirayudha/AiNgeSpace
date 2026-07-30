@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useAuth, useSignIn } from "@clerk/nextjs"
 import type { DesktopBridge } from "@/types/desktop"
 
@@ -44,6 +44,18 @@ export function DesktopAuthBridge() {
   // A ticket can arrive before Clerk finishes loading — the deep link is
   // replayed the moment the subscription exists. Park it rather than drop it.
   const [pendingTicket, setPendingTicket] = useState<string | null>(null)
+  // Tickets whose exchange has already been started. A sign-in ticket is
+  // single-use, so this must not be derived from state: the effect below runs
+  // twice per mount under StrictMode in dev, and the second run would spend a
+  // ticket the first run had already consumed.
+  const startedRef = useRef<Set<string>>(new Set())
+  // Mirrors `isSignedIn` for the async exchange below, which would otherwise
+  // read whatever value was captured when it started.
+  const isSignedInRef = useRef(false)
+
+  useEffect(() => {
+    isSignedInRef.current = Boolean(isSignedIn)
+  }, [isSignedIn])
 
   useEffect(() => {
     if (!desktop) return
@@ -73,8 +85,9 @@ export function DesktopAuthBridge() {
 
   useEffect(() => {
     if (!pendingTicket || !signIn) return
-    let cancelled = false
     const ticket = pendingTicket
+    if (startedRef.current.has(ticket)) return
+    startedRef.current.add(ticket)
 
     // The pill can only show one short line; the console keeps the full reason,
     // and with ELECTRON_ENABLE_LOGGING set by `dev:desktop` it reaches the
@@ -86,10 +99,22 @@ export function DesktopAuthBridge() {
       setPendingTicket(null)
     }
 
+    // Deliberately no cleanup that aborts this: `ticket()` followed by
+    // `finalize()` is one indivisible, non-idempotent trade. Bailing out
+    // between the two — which a `cancelled` flag did on every StrictMode
+    // remount — burns the ticket without ever activating the session, and the
+    // window would sit signed-out holding a ticket that can no longer be used.
     void (async () => {
       const attempt = await signIn.ticket({ ticket })
-      if (cancelled) return
       if (attempt.error) {
+        // Reaching this with a live session means the trade already went
+        // through (a replayed deep link, or a session opened meanwhile), so the
+        // user is signed in and there is nothing to report.
+        if (isSignedInRef.current) {
+          setStatus("idle")
+          setPendingTicket(null)
+          return
+        }
         fail("ticket exchange", attempt.error.message)
         return
       }
@@ -100,7 +125,6 @@ export function DesktopAuthBridge() {
         return
       }
       const finalized = await signIn.finalize()
-      if (cancelled) return
       if (finalized.error) {
         fail("finalize", finalized.error.message)
         return
@@ -108,10 +132,6 @@ export function DesktopAuthBridge() {
       setStatus("idle")
       setPendingTicket(null)
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [pendingTicket, signIn])
 
   const startSignIn = useCallback(() => {
