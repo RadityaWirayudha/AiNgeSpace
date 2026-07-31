@@ -69,6 +69,10 @@ const bridge: DesktopBridge = {
   isDesktop: true,
   platform: process.platform,
   appVersion: process.env.BM_APP_VERSION ?? "0.0.0",
+  // Set by the main process before the window is created. `os` is not reachable
+  // from a sandboxed preload, so it travels as an env var the same way the app
+  // version already does.
+  osBuild: Number(process.env.BM_OS_BUILD ?? "0") || 0,
   terminal: {
     create: (id: string, opts?: TerminalCreateOptions): Promise<TerminalCreateResult> =>
       ipcRenderer.invoke(CH.terminalCreate, id, opts ?? {}),

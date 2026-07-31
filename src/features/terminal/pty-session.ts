@@ -1,17 +1,20 @@
 "use client"
 
 /**
- * Keeps a real PTY attached to its `terminalId` across React remounts.
+ * Keeps a real PTY attached to its `terminalId`.
  *
- * `PaneTerminalManager` rebuilds the node tree whenever a pane is split,
- * maximised or restored. The element type at a given position changes when a
- * leaf becomes a split, so React tears the existing leaf down and mounts a new
- * one — killing the shell straight from the unmount cleanup would destroy a
- * running command every time the user clicks "split right".
+ * This used to carry the whole burden of surviving React: `PaneTerminalManager`
+ * rebuilt its node tree on every split, so React tore down the leaf component
+ * and the shell went with it unless the kill was deferred long enough for a
+ * remount to re-attach.
  *
- * So the kill is deferred. A remount inside the grace window re-attaches to the
- * same shell and replays whatever it printed while no xterm was listening; a
- * genuinely closed terminal still frees its process a couple of seconds later.
+ * That is no longer how terminals are owned. `terminal-instances.ts` holds the
+ * `Terminal` outside the React tree, so a split moves a DOM node and nothing is
+ * unmounted from the PTY's point of view; `releasePtySession` is now reached
+ * only from `disposeInstance`, i.e. when the terminal is genuinely gone. The
+ * grace window is kept — much shorter — purely as a safety net, and the replay
+ * buffer still earns its place: it repaints a shell that printed while its
+ * pane was hidden.
  */
 
 import type {
@@ -20,9 +23,10 @@ import type {
   TerminalExitPayload,
 } from "@/types/desktop"
 
-/** Long enough to cover a remount (and StrictMode's double mount), short
- *  enough that closing a pane does not leave a shell running for minutes. */
-const REATTACH_GRACE_MS = 2_500
+/** Now that remounts no longer reach this module, the only job left is to
+ *  absorb a same-tick release/acquire pair. Kept short so a closed pane frees
+ *  its process promptly. */
+const REATTACH_GRACE_MS = 500
 
 /** Cap on the replay buffer. A build log can emit megabytes; only the tail is
  *  worth showing, and holding all of it would leak for the app's lifetime. */

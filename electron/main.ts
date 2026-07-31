@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron"
+import { release } from "node:os"
 import { join, resolve } from "node:path"
 import { CH } from "./channels"
 import { resolveRuntimeEnv } from "./env"
@@ -24,6 +25,10 @@ let nextServer: NextServerHandle | null = null
 let ptyManager: PtyManager | null = null
 
 process.env.BM_APP_VERSION = app.getVersion()
+// `os.release()` is "10.0.19045" on Windows; xterm wants the third field. Read
+// here rather than in the preload, which is sandboxed and cannot require `os`.
+process.env.BM_OS_BUILD =
+  process.platform === "win32" ? (release().split(".")[2] ?? "0") : "0"
 
 function log(...parts: unknown[]) {
   // Stays on stdout: visible in `npm run dev:desktop`, harmless when packaged.

@@ -42,6 +42,12 @@ export interface DesktopBridge {
   readonly isDesktop: true
   readonly platform: string
   readonly appVersion: string
+  /**
+   * Windows build number, or 0 elsewhere. xterm needs it to model ConPTY's
+   * line-wrapping behaviour; without it, wrapped output reflows into garbage
+   * the first time a pane is resized.
+   */
+  readonly osBuild: number
   terminal: DesktopTerminalApi
   /** Opens a URL in the user's real browser instead of inside the app window. */
   openExternal(url: string): Promise<boolean>

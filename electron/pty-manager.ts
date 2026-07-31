@@ -15,12 +15,27 @@ interface Session {
   pty: IPty
   shell: string
   cwd: string
+  /** Output waiting for the next flush. See `MAX_SESSIONS` note below. */
+  pending: string[]
+  flushTimer: ReturnType<typeof setTimeout> | null
 }
 
 const MAX_SESSIONS = 64
-/** A runaway process can emit megabytes per second; drop anything absurd rather
- *  than wedging the renderer's IPC queue. */
-const MAX_CHUNK = 512 * 1024
+
+/**
+ * node-pty emits many small chunks in quick succession, and each one used to
+ * become its own IPC message. With a dozen panes open, a single chatty build
+ * saturated the renderer's message loop and showed up as input lag in *other*
+ * terminals. Collecting a few milliseconds of output into one message costs
+ * nothing perceptible and collapses that traffic by an order of magnitude.
+ */
+const FLUSH_INTERVAL_MS = 8
+
+/** Frames larger than this are split rather than sent whole, so one enormous
+ *  burst cannot stall the IPC channel. The previous code truncated instead,
+ *  which silently corrupted output rather than protecting anything. */
+const MAX_FRAME = 256 * 1024
+
 const MAX_WRITE = 64 * 1024
 
 function defaultShell(): { file: string; args: string[] } {
@@ -97,19 +112,50 @@ export class PtyManager {
         useConpty: process.platform === "win32",
       })
 
+      const session: Session = {
+        pty,
+        shell: file,
+        cwd,
+        pending: [],
+        flushTimer: null,
+      }
+
       pty.onData((data) => {
-        this.emit("data", id, data.length > MAX_CHUNK ? data.slice(0, MAX_CHUNK) : data)
+        session.pending.push(data)
+        if (session.flushTimer === null) {
+          session.flushTimer = setTimeout(() => this.flush(id), FLUSH_INTERVAL_MS)
+        }
       })
 
       pty.onExit(({ exitCode, signal }) => {
+        // Whatever the process printed on its way out has to reach the pane
+        // before the exit notice, or the last lines of a failing build vanish.
+        this.flush(id)
         this.sessions.delete(id)
         this.emit("exit", id, { exitCode, signal })
       })
 
-      this.sessions.set(id, { pty, shell: file, cwd })
+      this.sessions.set(id, session)
       return { ok: true, pid: pty.pid, shell: file, cwd }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  private flush(id: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    if (session.flushTimer !== null) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
+    if (session.pending.length === 0) return
+
+    const payload = session.pending.join("")
+    session.pending.length = 0
+
+    for (let offset = 0; offset < payload.length; offset += MAX_FRAME) {
+      this.emit("data", id, payload.slice(offset, offset + MAX_FRAME))
     }
   }
 
@@ -132,6 +178,8 @@ export class PtyManager {
     const session = this.sessions.get(id)
     if (!session) return
     this.sessions.delete(id)
+    if (session.flushTimer !== null) clearTimeout(session.flushTimer)
+    session.pending.length = 0
     try {
       session.pty.kill()
     } catch {
