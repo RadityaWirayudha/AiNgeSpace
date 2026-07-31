@@ -13,7 +13,11 @@ import {
   usePaneTerminalStore,
   countLeaves,
 } from "@/features/terminal/pane-terminal-store"
-import { PaneTerminalManager } from "@/features/terminal/PaneTerminalManager"
+import {
+  PaneTerminalManager,
+  TerminalHotkeys,
+} from "@/features/terminal/PaneTerminalManager"
+import { ShortcutsDialogProvider } from "@/components/KeyboardShortcutsDialog"
 import { cn } from "@/lib/utils"
 
 interface PaneData {
@@ -118,7 +122,7 @@ function BridgeMindInner() {
 
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
-  const { state: paneTermState } = usePaneTerminalStore()
+  const { state: paneTermState, disposePanes } = usePaneTerminalStore()
 
   const handleWorkspaceCreated = useCallback((draft: WorkspaceDraft) => {
     // The dialog used to hand back only an id, so the name the user typed and
@@ -174,18 +178,25 @@ function BridgeMindInner() {
     [addPaneTo, activeWorkspaceId]
   )
 
-  const closePane = useCallback((workspaceId: string, paneId: string) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) =>
-        ws.id === workspaceId
-          ? { ...ws, panes: ws.panes.filter((p) => p.id !== paneId) }
-          : ws
+  const closePane = useCallback(
+    (workspaceId: string, paneId: string) => {
+      setWorkspaces((prev) =>
+        prev.map((ws) =>
+          ws.id === workspaceId
+            ? { ...ws, panes: ws.panes.filter((p) => p.id !== paneId) }
+            : ws
+        )
       )
-    )
-    // A closed pane must not stay expanded or keep selection.
-    setExpandedPaneId((cur) => (cur === paneId ? null : cur))
-    setActivePaneId((cur) => (cur === paneId ? null : cur))
-  }, [])
+      // Terminals deliberately outlive unmounting — that is what keeps a shell
+      // running through a split or a workspace switch — so closing the pane is
+      // the moment its trees have to be released, or the PTYs live forever.
+      disposePanes([paneId])
+      // A closed pane must not stay expanded or keep selection.
+      setExpandedPaneId((cur) => (cur === paneId ? null : cur))
+      setActivePaneId((cur) => (cur === paneId ? null : cur))
+    },
+    [disposePanes]
+  )
 
   const renameWorkspace = useCallback((workspaceId: string, name: string) => {
     setWorkspaces((prev) =>
@@ -197,8 +208,11 @@ function BridgeMindInner() {
     (workspaceId: string) => {
       const index = workspaces.findIndex((ws) => ws.id === workspaceId)
       if (index < 0) return
+      const doomed = workspaces[index]
       const next = workspaces.filter((ws) => ws.id !== workspaceId)
       setWorkspaces(next)
+      // Every pane in the workspace goes with it, shells included.
+      disposePanes(doomed.panes.map((p) => p.id))
       // Closing the active workspace has to hand focus to a survivor, or the
       // grid renders empty with no obvious way back.
       if (activeWorkspaceId === workspaceId) {
@@ -208,7 +222,7 @@ function BridgeMindInner() {
         setExpandedPaneId(null)
       }
     },
-    [workspaces, activeWorkspaceId]
+    [workspaces, activeWorkspaceId, disposePanes]
   )
 
   /** The sidebar hands back the full id list in its new order; ids it does not
@@ -372,7 +386,12 @@ function BridgeMindInner() {
 export function BridgeMindLayout() {
   return (
     <PaneTerminalProvider>
-      <BridgeMindInner />
+      {/* Hotkeys sit inside both providers because they act on the terminal
+          tree and also have to open the shortcuts dialog. */}
+      <ShortcutsDialogProvider>
+        <TerminalHotkeys />
+        <BridgeMindInner />
+      </ShortcutsDialogProvider>
     </PaneTerminalProvider>
   )
 }

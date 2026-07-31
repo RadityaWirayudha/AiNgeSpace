@@ -4,8 +4,9 @@ import {
   createContext,
   useContext,
   useReducer,
-  useCallback,
+  useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react"
 
@@ -21,6 +22,9 @@ export interface TerminalSplit {
   id: string
   direction: "horizontal" | "vertical"
   children: PaneTerminalNode[]
+  /** Share of the parent each child takes, as fractions summing to 1. Parallel
+   *  to `children`, so anything that edits one has to edit the other. */
+  sizes: number[]
 }
 
 export type PaneTerminalNode = TerminalLeaf | TerminalSplit
@@ -32,6 +36,10 @@ interface PaneTreeState {
   /** Per pane: how many terminals have ever existed, for stable naming. */
   nameSeq: Record<string, number>
   activeTerminalId: string | null
+  /** Which terminal's title is being edited. Lives here rather than in the leaf
+   *  component because the rename shortcut fires from a global key listener,
+   *  which has no way to reach one component's local state. */
+  renamingTerminalId: string | null
 }
 
 type PaneTreeAction =
@@ -46,9 +54,15 @@ type PaneTreeAction =
   | { type: "CLOSE"; payload: { paneId: string; terminalId: string } }
   | { type: "TOGGLE_MAXIMIZE"; payload: { paneId: string; terminalId: string } }
   | { type: "RENAME"; payload: { paneId: string; terminalId: string; name: string } }
+  | { type: "SET_RENAMING"; payload: { terminalId: string | null } }
   | { type: "DUPLICATE"; payload: { paneId: string; terminalId: string } }
   | { type: "SET_ACTIVE"; payload: { terminalId: string } }
   | { type: "INIT_PANE"; payload: { paneId: string; terminalId: string; name: string } }
+  | {
+      type: "RESIZE_SPLIT"
+      payload: { paneId: string; nodeId: string; sizes: number[] }
+    }
+  | { type: "DISPOSE_PANES"; payload: { paneIds: string[] } }
 
 let termCounter = 0
 function nextTermId() {
@@ -70,6 +84,16 @@ function terminalName(seq: number): string {
     n = Math.floor(n / 26) - 1
   } while (n >= 0)
   return `Terminal ${out}`
+}
+
+/** Fractions that always sum to 1, so `flexGrow` stays a true percentage no
+ *  matter how many children were added or removed along the way. */
+function normalizeSizes(sizes: number[]): number[] {
+  if (sizes.length === 0) return sizes
+  const safe = sizes.map((s) => (Number.isFinite(s) && s > 0 ? s : 0))
+  const total = safe.reduce((sum, s) => sum + s, 0)
+  if (total <= 0) return sizes.map(() => 1 / sizes.length)
+  return safe.map((s) => s / total)
 }
 
 function findLeaf(
@@ -118,6 +142,7 @@ function splitLeaf(
       id: nextNodeId(),
       direction,
       children: [node, newLeaf],
+      sizes: [0.5, 0.5],
     }
   }
   return {
@@ -128,6 +153,12 @@ function splitLeaf(
   }
 }
 
+/**
+ * The previous implementation mapped then filtered, which silently desynced
+ * `sizes` from `children`: dropping child 0 left every remaining pane wearing
+ * its former neighbour's width. Indices are tracked explicitly instead, and the
+ * survivors are renormalised so the split still adds up to a full pane.
+ */
 function removeTerminal(
   node: PaneTerminalNode,
   terminalId: string
@@ -135,14 +166,26 @@ function removeTerminal(
   if (node.type === "leaf") {
     return node.terminalId === terminalId ? null : node
   }
-  const newChildren = node.children
-    .map((child) => removeTerminal(child, terminalId))
-    .filter((c): c is PaneTerminalNode => c !== null)
 
-  if (newChildren.length === 0) return null
-  // Collapse a split that has been reduced to a single child.
-  if (newChildren.length === 1) return newChildren[0]
-  return { ...node, children: newChildren }
+  const children: PaneTerminalNode[] = []
+  const sizes: number[] = []
+  const even = 1 / node.children.length
+  let changed = false
+
+  node.children.forEach((child, i) => {
+    const next = removeTerminal(child, terminalId)
+    if (next !== child) changed = true
+    if (next === null) return
+    children.push(next)
+    sizes.push(node.sizes[i] ?? even)
+  })
+
+  if (children.length === 0) return null
+  // Collapse a split that has been reduced to a single child; that child brings
+  // its own sizes with it, so nothing needs redistributing here.
+  if (children.length === 1) return children[0]
+  if (!changed) return node
+  return { ...node, children, sizes: normalizeSizes(sizes) }
 }
 
 function renameLeaf(
@@ -157,6 +200,39 @@ function renameLeaf(
     ...node,
     children: node.children.map((child) => renameLeaf(child, terminalId, name)),
   }
+}
+
+function resizeSplit(
+  node: PaneTerminalNode,
+  nodeId: string,
+  sizes: number[]
+): PaneTerminalNode {
+  if (node.type === "leaf") return node
+  if (node.id === nodeId) {
+    // A stale drag that finished after the tree changed shape would otherwise
+    // write an array of the wrong length and desync sizes from children.
+    if (sizes.length !== node.children.length) return node
+    return { ...node, sizes: normalizeSizes(sizes) }
+  }
+  let changed = false
+  const children = node.children.map((child) => {
+    const next = resizeSplit(child, nodeId, sizes)
+    if (next !== child) changed = true
+    return next
+  })
+  return changed ? { ...node, children } : node
+}
+
+function omitKeys<T>(
+  source: Record<string, T>,
+  keys: readonly string[]
+): Record<string, T> {
+  const next: Record<string, T> = {}
+  const drop = new Set(keys)
+  for (const [key, value] of Object.entries(source)) {
+    if (!drop.has(key)) next[key] = value
+  }
+  return next
 }
 
 function paneReducer(
@@ -263,6 +339,10 @@ function paneReducer(
         activeTerminalId: stillExists
           ? state.activeTerminalId
           : remaining[0]?.id ?? null,
+        renamingTerminalId:
+          state.renamingTerminalId === terminalId
+            ? null
+            : state.renamingTerminalId,
       }
     }
 
@@ -289,11 +369,26 @@ function paneReducer(
       const { paneId, terminalId, name } = action.payload
       const tree = state.trees[paneId]
       const trimmed = name.trim()
-      if (!tree || !trimmed) return state
+      // The edit always ends, even when the name is rejected — otherwise
+      // blurring an empty field left the input open with no way to close it.
+      const renamingTerminalId =
+        state.renamingTerminalId === terminalId ? null : state.renamingTerminalId
+
+      if (!tree || !trimmed) {
+        if (renamingTerminalId === state.renamingTerminalId) return state
+        return { ...state, renamingTerminalId }
+      }
       return {
         ...state,
         trees: { ...state.trees, [paneId]: renameLeaf(tree, terminalId, trimmed) },
+        renamingTerminalId,
       }
+    }
+
+    case "SET_RENAMING": {
+      const { terminalId } = action.payload
+      if (state.renamingTerminalId === terminalId) return state
+      return { ...state, renamingTerminalId: terminalId }
     }
 
     case "SET_ACTIVE": {
@@ -301,13 +396,46 @@ function paneReducer(
       return { ...state, activeTerminalId: action.payload.terminalId }
     }
 
+    case "RESIZE_SPLIT": {
+      const { paneId, nodeId, sizes } = action.payload
+      const tree = state.trees[paneId]
+      if (!tree) return state
+      const newTree = resizeSplit(tree, nodeId, sizes)
+      if (newTree === tree) return state
+      return { ...state, trees: { ...state.trees, [paneId]: newTree } }
+    }
+
+    case "DISPOSE_PANES": {
+      const { paneIds } = action.payload
+      const doomed = paneIds.filter((id) => id in state.trees)
+      if (doomed.length === 0) return state
+
+      const gone = new Set<string>()
+      for (const paneId of doomed) {
+        for (const t of collectTerminals(state.trees[paneId])) gone.add(t.id)
+      }
+
+      return {
+        trees: omitKeys(state.trees, doomed),
+        maximized: omitKeys(state.maximized, doomed),
+        nameSeq: omitKeys(state.nameSeq, doomed),
+        activeTerminalId:
+          state.activeTerminalId && gone.has(state.activeTerminalId)
+            ? null
+            : state.activeTerminalId,
+        renamingTerminalId:
+          state.renamingTerminalId && gone.has(state.renamingTerminalId)
+            ? null
+            : state.renamingTerminalId,
+      }
+    }
+
     default:
       return state
   }
 }
 
-interface PaneTerminalContextValue {
-  state: PaneTreeState
+export interface PaneTerminalActions {
   initPane: (paneId: string, terminalId: string, name: string) => void
   splitTerminal: (
     paneId: string,
@@ -318,10 +446,24 @@ interface PaneTerminalContextValue {
   duplicateTerminal: (paneId: string, terminalId: string) => void
   toggleMaximize: (paneId: string, terminalId: string) => void
   renameTerminal: (paneId: string, terminalId: string, name: string) => void
+  setRenaming: (terminalId: string | null) => void
   setActive: (terminalId: string) => void
+  resizeSplitNode: (paneId: string, nodeId: string, sizes: number[]) => void
+  disposePanes: (paneIds: string[]) => void
 }
 
-const PaneTerminalContext = createContext<PaneTerminalContextValue | null>(null)
+interface PaneTerminalContextValue extends PaneTerminalActions {
+  state: PaneTreeState
+}
+
+/**
+ * State and actions are separate contexts because they change on wildly
+ * different schedules: the action bag is created once, while `state` changes on
+ * every keystroke that moves focus. Merged, a single `SET_ACTIVE` re-rendered
+ * every leaf in every pane.
+ */
+const PaneTerminalStateContext = createContext<PaneTreeState | null>(null)
+const PaneTerminalActionsContext = createContext<PaneTerminalActions | null>(null)
 
 export function PaneTerminalProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(paneReducer, {
@@ -329,93 +471,97 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
     maximized: {},
     nameSeq: {},
     activeTerminalId: null,
+    renamingTerminalId: null,
   })
 
-  const initPane = useCallback(
-    (paneId: string, terminalId: string, name: string) =>
-      dispatch({ type: "INIT_PANE", payload: { paneId, terminalId, name } }),
-    []
-  )
-
-  const splitTerminal = useCallback(
-    (
-      paneId: string,
-      terminalId: string,
-      direction: "horizontal" | "vertical"
-    ) => dispatch({ type: "SPLIT", payload: { paneId, terminalId, direction } }),
-    []
-  )
-
-  const closeTerminal = useCallback(
-    (paneId: string, terminalId: string) =>
-      dispatch({ type: "CLOSE", payload: { paneId, terminalId } }),
-    []
-  )
-
-  const duplicateTerminal = useCallback(
-    (paneId: string, terminalId: string) =>
-      dispatch({ type: "DUPLICATE", payload: { paneId, terminalId } }),
-    []
-  )
-
-  const toggleMaximize = useCallback(
-    (paneId: string, terminalId: string) =>
-      dispatch({ type: "TOGGLE_MAXIMIZE", payload: { paneId, terminalId } }),
-    []
-  )
-
-  const renameTerminal = useCallback(
-    (paneId: string, terminalId: string, name: string) =>
-      dispatch({ type: "RENAME", payload: { paneId, terminalId, name } }),
-    []
-  )
-
-  const setActive = useCallback(
-    (terminalId: string) =>
-      dispatch({ type: "SET_ACTIVE", payload: { terminalId } }),
-    []
-  )
-
-  // Without this the context value is a fresh object every render, so every
-  // consumer — including each mounted terminal — re-renders on any keystroke.
-  const value = useMemo(
+  const actions = useMemo<PaneTerminalActions>(
     () => ({
-      state,
-      initPane,
-      splitTerminal,
-      closeTerminal,
-      duplicateTerminal,
-      toggleMaximize,
-      renameTerminal,
-      setActive,
+      initPane: (paneId, terminalId, name) =>
+        dispatch({ type: "INIT_PANE", payload: { paneId, terminalId, name } }),
+      splitTerminal: (paneId, terminalId, direction) =>
+        dispatch({ type: "SPLIT", payload: { paneId, terminalId, direction } }),
+      closeTerminal: (paneId, terminalId) =>
+        dispatch({ type: "CLOSE", payload: { paneId, terminalId } }),
+      duplicateTerminal: (paneId, terminalId) =>
+        dispatch({ type: "DUPLICATE", payload: { paneId, terminalId } }),
+      toggleMaximize: (paneId, terminalId) =>
+        dispatch({ type: "TOGGLE_MAXIMIZE", payload: { paneId, terminalId } }),
+      renameTerminal: (paneId, terminalId, name) =>
+        dispatch({ type: "RENAME", payload: { paneId, terminalId, name } }),
+      setRenaming: (terminalId) =>
+        dispatch({ type: "SET_RENAMING", payload: { terminalId } }),
+      setActive: (terminalId) =>
+        dispatch({ type: "SET_ACTIVE", payload: { terminalId } }),
+      resizeSplitNode: (paneId, nodeId, sizes) =>
+        dispatch({ type: "RESIZE_SPLIT", payload: { paneId, nodeId, sizes } }),
+      disposePanes: (paneIds) =>
+        dispatch({ type: "DISPOSE_PANES", payload: { paneIds } }),
     }),
-    [
-      state,
-      initPane,
-      splitTerminal,
-      closeTerminal,
-      duplicateTerminal,
-      toggleMaximize,
-      renameTerminal,
-      setActive,
-    ]
+    []
   )
+
+  // Read at GC time rather than closed over, so a terminal created between the
+  // effect firing and the dynamic import resolving is not mistaken for garbage.
+  const treesRef = useRef(state.trees)
+  useEffect(() => {
+    treesRef.current = state.trees
+  })
+
+  // Before the first pane initialises, `trees` is empty for reasons that have
+  // nothing to do with terminals dying; arming on the first non-empty tree
+  // keeps that render from wiping instances the slots are still creating.
+  const gcArmed = useRef(false)
+
+  useEffect(() => {
+    if (Object.keys(state.trees).length > 0) gcArmed.current = true
+    if (!gcArmed.current) return
+
+    // Imported lazily to keep xterm out of the server bundle and out of the
+    // initial chunk; the slots already load this module on mount.
+    void import("./terminal-instances").then((registry) => {
+      const alive = new Set<string>()
+      for (const tree of Object.values(treesRef.current)) {
+        for (const t of collectTerminals(tree)) alive.add(t.id)
+      }
+      registry.disposeInstancesExcept(alive)
+    })
+  }, [state.trees])
 
   return (
-    <PaneTerminalContext.Provider value={value}>
-      {children}
-    </PaneTerminalContext.Provider>
+    <PaneTerminalActionsContext.Provider value={actions}>
+      <PaneTerminalStateContext.Provider value={state}>
+        {children}
+      </PaneTerminalStateContext.Provider>
+    </PaneTerminalActionsContext.Provider>
   )
 }
 
-export function usePaneTerminalStore() {
-  const ctx = useContext(PaneTerminalContext)
-  if (!ctx) {
+export function usePaneTerminalState(): PaneTreeState {
+  const state = useContext(PaneTerminalStateContext)
+  if (!state) {
     throw new Error(
-      "usePaneTerminalStore must be used within PaneTerminalProvider"
+      "usePaneTerminalState must be used within PaneTerminalProvider"
     )
   }
-  return ctx
+  return state
+}
+
+export function usePaneTerminalActions(): PaneTerminalActions {
+  const actions = useContext(PaneTerminalActionsContext)
+  if (!actions) {
+    throw new Error(
+      "usePaneTerminalActions must be used within PaneTerminalProvider"
+    )
+  }
+  return actions
+}
+
+/** Both halves at once. Convenient, but it re-renders on every state change —
+ *  prefer the split hooks anywhere inside the terminal grid. */
+export function usePaneTerminalStore(): PaneTerminalContextValue {
+  const state = usePaneTerminalState()
+  const actions = usePaneTerminalActions()
+  return useMemo(() => ({ state, ...actions }), [state, actions])
 }
 
 export { collectTerminals, countLeaves, findLeaf, terminalName }

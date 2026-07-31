@@ -802,10 +802,75 @@
   line-height: 1.5;
 }
 
-/* Terminals and other full-bleed children supply their own padding. */
+/* Terminals and other full-bleed children supply their own padding. The
+   containment is load-bearing with a dozen terminals open: without it, one
+   xterm reflowing forces the browser to re-lay-out and repaint every other
+   pane in the grid. */
 .bm-pane-body-flush {
   padding: 0;
   overflow: hidden;
+  contain: layout paint;
+}
+
+/* ------------------------------------------------------------------
+   SASH
+-------------------------------------------------------------------*/
+
+/* Same trick as .bm-sb-resize: the pointer gets a 5px target while only a 1px
+   line ever paints, so dragging is comfortable and the hairline grid survives.
+   `touch-action: none` is what lets pointer capture own the gesture instead of
+   the browser turning it into a scroll, and `user-select: none` stops the drag
+   from painting a text selection across the terminals it passes over — the
+   handler cannot preventDefault() the pointerdown without also killing the
+   double-click that resets the split. */
+.bm-sash {
+  position: relative;
+  flex: 0 0 5px;
+  align-self: stretch;
+  z-index: 1;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+}
+
+.bm-sash::after {
+  content: "";
+  position: absolute;
+  background: var(--bm-border);
+  transition: background 0.12s ease;
+}
+
+.bm-sash-col {
+  cursor: col-resize;
+}
+
+.bm-sash-col::after {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+}
+
+.bm-sash-row {
+  cursor: row-resize;
+}
+
+.bm-sash-row::after {
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 1px;
+}
+
+.bm-sash:hover::after,
+.bm-sash-active::after {
+  background: var(--bm-live);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-sash::after {
+    transition: none;
+  }
 }
 
 .bm-pane-footer {
