@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
-import { encrypt, decrypt } from "@/lib/supabase/encryption"
+import { encrypt } from "@/lib/supabase/encryption"
 import { z } from "zod"
 
-const createEnvSchema = z.object({
-  key: z.string().min(1).max(255),
-  value: z.string().min(1),
+const upsertEnvSchema = z.object({
+  // Matches env_vars_aingespace_key_format. Rejecting "npm run dev" here means
+  // it never reaches the PTY environment as a broken variable name.
+  key: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]{0,254}$/, "Key harus berupa nama variabel shell yang sah"),
+  value: z.string().min(1).max(64 * 1024),
 })
 
 export async function GET(
@@ -19,21 +24,23 @@ export async function GET(
     const supabase = createServerClient()
 
     const { data: workspace } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .select("id")
       .eq("id", workspaceId)
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
+    // Ciphertext is deliberately absent from this listing; /decrypt is the one
+    // endpoint that hands values back.
     const { data, error } = await supabase
-      .from("aingespace_environment_variables")
+      .from("env_vars_aingespace")
       .select("id, key, created_at, updated_at")
       .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true })
+      .order("key", { ascending: true })
 
     if (error) throw error
 
@@ -54,39 +61,38 @@ export async function POST(
     const userId = await getAuthUserId()
     const { workspaceId } = await params
     const body = await request.json()
-    const parsed = createEnvSchema.parse(body)
+    const parsed = upsertEnvSchema.parse(body)
 
     const supabase = createServerClient()
 
     const { data: workspace } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .select("id")
       .eq("id", workspaceId)
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
-    const encryptedValue = encrypt(parsed.value)
-
+    // Upsert rather than insert: editing an existing variable is the common
+    // case, and the old handler answered it with a 409 that left the caller to
+    // delete and re-create the row just to change a value.
     const { data, error } = await supabase
-      .from("aingespace_environment_variables")
-      .insert({
-        workspace_id: workspaceId,
-        key: parsed.key,
-        value: encryptedValue,
-      })
+      .from("env_vars_aingespace")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          key: parsed.key,
+          value_encrypted: encrypt(parsed.value),
+        },
+        { onConflict: "workspace_id,key" }
+      )
       .select("id, key, created_at, updated_at")
       .single()
 
-    if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json({ error: "Environment variable already exists" }, { status: 409 })
-      }
-      throw error
-    }
+    if (error) throw error
 
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
@@ -117,18 +123,18 @@ export async function DELETE(
     const supabase = createServerClient()
 
     const { data: workspace } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .select("id")
       .eq("id", workspaceId)
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
     const { error } = await supabase
-      .from("aingespace_environment_variables")
+      .from("env_vars_aingespace")
       .delete()
       .eq("id", envId)
       .eq("workspace_id", workspaceId)

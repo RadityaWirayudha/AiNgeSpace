@@ -9,31 +9,7 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      aingespace_users: {
-        Row: {
-          id: string
-          email: string | null
-          display_name: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          email?: string | null
-          display_name?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string | null
-          display_name?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      aingespace_workspaces: {
+      workspaces_aingespace: {
         Row: {
           id: string
           clerk_user_id: string
@@ -41,6 +17,9 @@ export interface Database {
           github_repo: string
           github_branch: string
           local_path: string | null
+          layout_preset: string
+          agent_ids: string[]
+          sort_order: number
           created_at: string
           updated_at: string
         }
@@ -51,6 +30,9 @@ export interface Database {
           github_repo: string
           github_branch?: string
           local_path?: string | null
+          layout_preset?: string
+          agent_ids?: string[]
+          sort_order?: number
           created_at?: string
           updated_at?: string
         }
@@ -61,114 +43,94 @@ export interface Database {
           github_repo?: string
           github_branch?: string
           local_path?: string | null
+          layout_preset?: string
+          agent_ids?: string[]
+          sort_order?: number
           created_at?: string
           updated_at?: string
         }
         Relationships: []
       }
-      aingespace_terminals: {
+      panes_aingespace: {
         Row: {
           id: string
           workspace_id: string
-          name: string
-          layout: Json
+          title: string
+          position: number
+          pinned: boolean
+          tree: Json
+          name_seq: number
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           workspace_id: string
-          name: string
-          layout?: Json
+          title: string
+          position?: number
+          pinned?: boolean
+          tree: Json
+          name_seq?: number
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           workspace_id?: string
-          name?: string
-          layout?: Json
+          title?: string
+          position?: number
+          pinned?: boolean
+          tree?: Json
+          name_seq?: number
           created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "aingespace_terminals_workspace_id_fkey"
+            foreignKeyName: "panes_aingespace_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
-            referencedRelation: "aingespace_workspaces"
+            referencedRelation: "workspaces_aingespace"
             referencedColumns: ["id"]
           }
         ]
       }
-      aingespace_github_connections: {
+      github_connections_aingespace: {
         Row: {
           id: string
           clerk_user_id: string
           github_user_id: string
           github_username: string
-          access_token: string
+          access_token_encrypted: string
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           clerk_user_id: string
           github_user_id: string
           github_username: string
-          access_token: string
+          access_token_encrypted: string
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           clerk_user_id?: string
           github_user_id?: string
           github_username?: string
-          access_token?: string
+          access_token_encrypted?: string
           created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
-      aingespace_ai_sessions: {
-        Row: {
-          id: string
-          workspace_id: string
-          provider: string
-          model: string
-          prompt: string
-          response: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          workspace_id: string
-          provider: string
-          model: string
-          prompt: string
-          response?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          workspace_id?: string
-          provider?: string
-          model?: string
-          prompt?: string
-          response?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "aingespace_ai_sessions_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "aingespace_workspaces"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      aingespace_environment_variables: {
+      env_vars_aingespace: {
         Row: {
           id: string
           workspace_id: string
           key: string
-          value: string
+          value_encrypted: string
           created_at: string
           updated_at: string
         }
@@ -176,7 +138,7 @@ export interface Database {
           id?: string
           workspace_id: string
           key: string
-          value: string
+          value_encrypted: string
           created_at?: string
           updated_at?: string
         }
@@ -184,16 +146,16 @@ export interface Database {
           id?: string
           workspace_id?: string
           key?: string
-          value?: string
+          value_encrypted?: string
           created_at?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "aingespace_environment_variables_workspace_id_fkey"
+            foreignKeyName: "env_vars_aingespace_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
-            referencedRelation: "aingespace_workspaces"
+            referencedRelation: "workspaces_aingespace"
             referencedColumns: ["id"]
           }
         ]

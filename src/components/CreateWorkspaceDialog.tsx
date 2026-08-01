@@ -693,6 +693,11 @@ export function CreateWorkspaceDialog({
             name: workspaceName.trim(),
             githubRepo: repoUrl.trim(),
             githubBranch: branch.trim() || "main",
+            // The layout and the agent selection used to stop here: the layout
+            // was smuggled through localStorage and the agents were dropped
+            // entirely, so reopening a workspace lost both.
+            layoutPreset: layoutId,
+            agentIds,
           }),
         })
         if (res.ok) {

@@ -13,31 +13,47 @@ export async function GET(
     const supabase = createServerClient()
 
     const { data: workspace } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .select("id")
       .eq("id", workspaceId)
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
     const { data, error } = await supabase
-      .from("aingespace_environment_variables")
-      .select("*")
+      .from("env_vars_aingespace")
+      .select("id, key, value_encrypted, created_at, updated_at")
       .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true })
+      .order("key", { ascending: true })
 
     if (error) throw error
 
-    const decrypted = data.map((env) => ({
-      id: env.id,
-      key: env.key,
-      value: decrypt(env.value),
-      created_at: env.created_at,
-      updated_at: env.updated_at,
-    }))
+    // One unreadable row — a value written under a rotated ENCRYPTION_KEY —
+    // used to throw and take the whole response with it, hiding every other
+    // variable. The bad row is reported instead so the UI can flag it.
+    const decrypted = data.map((env) => {
+      try {
+        return {
+          id: env.id,
+          key: env.key,
+          value: decrypt(env.value_encrypted),
+          created_at: env.created_at,
+          updated_at: env.updated_at,
+        }
+      } catch {
+        return {
+          id: env.id,
+          key: env.key,
+          value: null,
+          error: "decrypt_failed" as const,
+          created_at: env.created_at,
+          updated_at: env.updated_at,
+        }
+      }
+    })
 
     return NextResponse.json(decrypted)
   } catch (error) {

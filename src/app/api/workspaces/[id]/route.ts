@@ -3,11 +3,21 @@ import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
 import { z } from "zod"
 
-const updateWorkspaceSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  github_branch: z.string().optional(),
-  local_path: z.string().optional(),
-})
+const LAYOUT_PRESETS = ["l1", "l2v", "l2h", "l4", "l6", "l8"] as const
+
+const updateWorkspaceSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255).optional(),
+    github_branch: z.string().trim().min(1).max(255).optional(),
+    local_path: z.string().nullable().optional(),
+    layout_preset: z.enum(LAYOUT_PRESETS).optional(),
+    agent_ids: z.array(z.string().min(1).max(64)).max(32).optional(),
+  })
+  // An empty body used to produce an UPDATE with no columns, which PostgREST
+  // rejects with a 500 rather than saying what was wrong.
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Tidak ada field yang diubah",
+  })
 
 export async function GET(
   _request: NextRequest,
@@ -18,12 +28,15 @@ export async function GET(
     const { id } = await params
     const supabase = createServerClient()
 
+    // maybeSingle, not single: a workspace that does not exist (or belongs to
+    // somebody else) is a 404, and `single()` turned that into a thrown error
+    // that the catch below reported as a 500.
     const { data, error } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .select("*")
       .eq("id", id)
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) {
@@ -52,14 +65,17 @@ export async function PATCH(
     const supabase = createServerClient()
 
     const { data, error } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .update(parsed)
       .eq("id", id)
       .eq("clerk_user_id", userId)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) throw error
+    if (!data) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
+    }
 
     return NextResponse.json(data)
   } catch (error) {
@@ -82,8 +98,9 @@ export async function DELETE(
     const { id } = await params
     const supabase = createServerClient()
 
+    // Panes and env vars go with the workspace via ON DELETE CASCADE.
     const { error } = await supabase
-      .from("aingespace_workspaces")
+      .from("workspaces_aingespace")
       .delete()
       .eq("id", id)
       .eq("clerk_user_id", userId)

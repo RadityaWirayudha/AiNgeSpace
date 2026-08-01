@@ -8,17 +8,20 @@ export async function GET() {
     const userId = await getAuthUserId()
     const supabase = createServerClient()
 
+    // maybeSingle: a user who has never connected GitHub is the normal case,
+    // and `single()` treated it as an error that surfaced as a 500 instead of
+    // the `connected: false` the caller expects.
     const { data: connection } = await supabase
-      .from("aingespace_github_connections")
-      .select("*")
+      .from("github_connections_aingespace")
+      .select("github_username, access_token_encrypted")
       .eq("clerk_user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (!connection) {
       return NextResponse.json({ connected: false, repos: [] })
     }
 
-    const accessToken = decrypt(connection.access_token)
+    const accessToken = decrypt(connection.access_token_encrypted)
 
     const reposResponse = await fetch(
       "https://api.github.com/user/repos?sort=updated&per_page=30",

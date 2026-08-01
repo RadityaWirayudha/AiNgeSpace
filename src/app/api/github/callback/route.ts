@@ -46,37 +46,23 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient()
 
-    const { data: existing } = await supabase
-      .from("aingespace_github_connections")
-      .select("id")
-      .eq("clerk_user_id", userId)
-      .single()
-
-    const encryptedToken = encrypt(tokenData.access_token)
-
-    if (existing) {
-      const { error } = await supabase
-        .from("aingespace_github_connections")
-        .update({
-          github_user_id: String(githubUser.id),
-          github_username: githubUser.login,
-          access_token: encryptedToken,
-        })
-        .eq("id", existing.id)
-
-      if (error) throw error
-    } else {
-      const { error } = await supabase
-        .from("aingespace_github_connections")
-        .insert({
+    // One upsert replaces the old select-then-insert-or-update. That sequence
+    // had a real race: two callbacks arriving together both saw no row and both
+    // inserted, after which `.single()` in /api/github/repos failed forever.
+    // UNIQUE(clerk_user_id) on the table is what makes this safe.
+    const { error } = await supabase
+      .from("github_connections_aingespace")
+      .upsert(
+        {
           clerk_user_id: userId,
           github_user_id: String(githubUser.id),
           github_username: githubUser.login,
-          access_token: encryptedToken,
-        })
+          access_token_encrypted: encrypt(tokenData.access_token),
+        },
+        { onConflict: "clerk_user_id" }
+      )
 
-      if (error) throw error
-    }
+    if (error) throw error
 
     return NextResponse.redirect(new URL("/dashboard", request.url))
   } catch (error) {
