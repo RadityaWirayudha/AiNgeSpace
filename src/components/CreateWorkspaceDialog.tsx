@@ -25,6 +25,11 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  LAYOUT_PRESETS,
+  terminalCountFor,
+  type LayoutPreset,
+} from "@/lib/workspace/layouts"
 
 /* ------------------------------------------------------------------
    TYPES
@@ -38,6 +43,10 @@ export interface WorkspaceDraft {
   terminalCount: number
   agentIds: string[]
   agentCount: number
+  /** False when the POST failed and this workspace exists only in this tab.
+   *  The caller uses it to decide whether anything may be written back — the
+   *  id belongs to no row, so a pane insert against it would 404. */
+  persisted: boolean
 }
 
 interface CreateWorkspaceDialogProps {
@@ -55,14 +64,11 @@ const STEPS = [
   { id: 3, label: "Agen" },
 ] as const
 
-const LAYOUTS = [
-  { id: "l1", label: "1", count: 1 },
-  { id: "l2v", label: "2", count: 2, dir: "row" },
-  { id: "l2h", label: "2", count: 2, dir: "col" },
-  { id: "l4", label: "4", count: 4, grid: [2, 2] },
-  { id: "l6", label: "6", count: 6, grid: [3, 2] },
-  { id: "l8", label: "8", count: 8, grid: [4, 2] },
-] as const
+// The presets themselves live in src/lib/workspace/layouts.ts, because the
+// database CHECK constraint and both workspace route handlers need the same
+// list — and the workspace route needs the terminal count that only this
+// dialog used to know.
+const LAYOUTS = LAYOUT_PRESETS
 
 const PRESETS = [
   { id: "p1", name: "Frontend", icon: Layers, layout: "l4", agents: ["a1", "a3"], desc: "UI, komponen, styling" },
@@ -81,8 +87,6 @@ const AGENTS = [
   { id: "a5", name: "Watcher", provider: "Anthropic", model: "Haiku 4.5", icon: Terminal, desc: "Memantau log dan pipeline, menandai kegagalan.", tokens: "~1k / turn" },
 ] as const
 
-type Layout = (typeof LAYOUTS)[number]
-
 /* ------------------------------------------------------------------
    GRID PREVIEW
 -------------------------------------------------------------------*/
@@ -91,7 +95,7 @@ function GridPreview({
   size = 44,
   active,
 }: {
-  layout: Layout
+  layout: LayoutPreset
   size?: number
   active: boolean
 }) {
@@ -550,6 +554,11 @@ function AgentsStep({
 /* ------------------------------------------------------------------
    DIALOG
 -------------------------------------------------------------------*/
+
+/** Distinguishes local-only workspaces created in the same millisecond, which
+ *  a timestamp id could not. */
+let localWorkspaceSeq = 0
+
 export function CreateWorkspaceDialog({
   open,
   onClose,
@@ -680,8 +689,7 @@ export function CreateWorkspaceDialog({
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const terminalCount =
-        LAYOUTS.find((l) => l.id === layoutId)?.count ?? 1
+      const terminalCount = terminalCountFor(layoutId)
       const agentIds = AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
 
       let workspaceId: string | null = null
@@ -709,7 +717,12 @@ export function CreateWorkspaceDialog({
         // rather than blocking the user.
       }
 
-      if (!workspaceId) workspaceId = `ws-${Date.now()}`
+      // The old fallback was `ws-${Date.now()}`, which read as a real id but is
+      // not a uuid, so every later request for it failed validation instead of
+      // being recognised as unbacked. A "local-" id says what it is, and
+      // `persisted: false` tells the caller not to write anything for it.
+      const persisted = workspaceId !== null
+      if (!workspaceId) workspaceId = `local-ws-${++localWorkspaceSeq}`
 
       onCreated?.({
         id: workspaceId,
@@ -720,6 +733,7 @@ export function CreateWorkspaceDialog({
         terminalCount,
         agentIds,
         agentCount: agentIds.length,
+        persisted,
       })
       handleClose()
     } catch {

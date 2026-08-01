@@ -5,6 +5,11 @@ import { treeSchema, treeToJson } from "@/lib/panes/tree-schema"
 import { z } from "zod"
 
 const createPaneSchema = z.object({
+  // The client mints the id so the row and the in-memory terminal tree, which
+  // is keyed by pane id, share an identity before the response comes back.
+  // Re-sending the same id after a failed request is an idempotent retry
+  // rather than a duplicate pane.
+  id: z.string().uuid().optional(),
   workspaceId: z.string().uuid(),
   title: z.string().trim().min(1).max(255),
   position: z.number().int().min(0).max(64).optional(),
@@ -75,9 +80,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
+    // insert, never upsert: the id arrives from the client, and an upsert would
+    // let a caller overwrite somebody else's pane row by guessing its id and
+    // naming a workspace they do own.
     const { data, error } = await supabase
       .from("panes_aingespace")
       .insert({
+        ...(parsed.id ? { id: parsed.id } : {}),
         workspace_id: parsed.workspaceId,
         title: parsed.title,
         position: parsed.position ?? 0,
@@ -88,6 +97,11 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
+    // 23505 is a primary key collision, which for a client-minted uuid means
+    // the pane already exists — a retry of a request that in fact succeeded.
+    if (error?.code === "23505") {
+      return NextResponse.json({ error: "Pane already exists" }, { status: 409 })
+    }
     if (error) throw error
 
     return NextResponse.json(data, { status: 201 })

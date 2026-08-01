@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -10,57 +10,123 @@ import {
   Clock,
   ArrowRight,
   Plus,
-  Code2,
-  Activity,
-  HardDrive,
+  Boxes,
+  History,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog"
+import {
+  fetchWorkspaces,
+  ApiError,
+  type WorkspaceRow,
+} from "@/features/workspace/workspace-api"
+import { relativeTime } from "@/lib/format/relative-time"
 
-const mockWorkspaces = [
-  {
-    id: "ws-1",
-    name: "my-nextjs-app",
-    repo: "user/my-nextjs-app",
-    branch: "main",
-    updatedAt: "2 hours ago",
-    language: "TypeScript",
-    status: "active" as const,
-  },
-  {
-    id: "ws-2",
-    name: "ai-chatbot",
-    repo: "user/ai-chatbot",
-    branch: "develop",
-    updatedAt: "1 day ago",
-    language: "Python",
-    status: "idle" as const,
-  },
-  {
-    id: "ws-3",
-    name: "portfolio-site",
-    repo: "user/portfolio-site",
-    branch: "main",
-    updatedAt: "3 days ago",
-    language: "JavaScript",
-    status: "idle" as const,
-  },
-]
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "ready"; rows: WorkspaceRow[] }
+  | { kind: "error"; message: string }
 
-const languageColors: Record<string, string> = {
-  TypeScript: "text-blue-400 bg-blue-400/10",
-  Python: "text-green-400 bg-green-400/10",
-  JavaScript: "text-yellow-400 bg-yellow-400/10",
-}
+/** Shared so the "not ready yet" case keeps a stable identity and the stats
+ *  memo does not recompute on every render. */
+const NO_ROWS: WorkspaceRow[] = []
 
-const statusColors: Record<string, { dot: string; label: string }> = {
-  active: { dot: "bg-green-500", label: "Active" },
-  idle: { dot: "bg-zinc-600", label: "Idle" },
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+  color: string
+}) {
+  return (
+    <div className="p-4 rounded-xl card-surface">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className={`size-3.5 ${color}`} />
+        <span className="text-[11px] text-zinc-500 font-medium">{label}</span>
+      </div>
+      <div className="text-lg font-bold tracking-tight">{value}</div>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [state, setState] = useState<LoadState>({ kind: "loading" })
+  // Bumped by the retry button. The fetch lives entirely in the effect so that
+  // nothing sets state synchronously while React is committing.
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchWorkspaces()
+      .then((rows) => {
+        if (!cancelled) setState({ kind: "ready", rows })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setState({
+          kind: "error",
+          message:
+            error instanceof ApiError && error.status === 401
+              ? "Sign in to see your workspaces."
+              : "Could not load workspaces.",
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [attempt])
+
+  const retry = useCallback(() => {
+    setState({ kind: "loading" })
+    setAttempt((n) => n + 1)
+  }, [])
+
+  const rows = state.kind === "ready" ? state.rows : NO_ROWS
+
+  /**
+   * The three cards used to read "3", "1" and "2.4 GB", none of which came from
+   * anywhere. These are the only figures the workspace list can actually
+   * support — there is no liveness signal and no disk accounting in the schema.
+   */
+  const stats = useMemo(() => {
+    const repos = new Set(rows.map((row) => row.github_repo))
+    const newest = rows.reduce<string | null>((latest, row) => {
+      if (!latest) return row.updated_at
+      return Date.parse(row.updated_at) > Date.parse(latest)
+        ? row.updated_at
+        : latest
+    }, null)
+
+    return [
+      {
+        icon: FolderOpen,
+        label: "Workspaces",
+        value: String(rows.length),
+        color: "text-purple",
+      },
+      {
+        icon: Boxes,
+        label: "Repositories",
+        value: String(repos.size),
+        color: "text-blue-400",
+      },
+      {
+        icon: History,
+        label: "Last active",
+        value: newest ? relativeTime(newest) : "—",
+        color: "text-green-400",
+      },
+    ]
+  }, [rows])
 
   return (
     <div className="flex flex-col min-h-screen relative">
@@ -98,23 +164,52 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-3 mb-10">
-          {[
-            { icon: FolderOpen, label: "Workspaces", value: "3", color: "text-purple" },
-            { icon: Activity, label: "Active", value: "1", color: "text-green-400" },
-            { icon: HardDrive, label: "Storage", value: "2.4 GB", color: "text-blue-400" },
-          ].map((stat) => (
-            <div key={stat.label} className="p-4 rounded-xl card-surface">
-              <div className="flex items-center gap-2 mb-2">
-                <stat.icon className={`size-3.5 ${stat.color}`} />
-                <span className="text-[11px] text-zinc-500 font-medium">{stat.label}</span>
-              </div>
-              <div className="text-lg font-bold tracking-tight">{stat.value}</div>
-            </div>
+          {stats.map((stat) => (
+            <StatCard key={stat.label} {...stat} />
           ))}
         </div>
 
+        {state.kind === "loading" && (
+          <div className="flex items-center gap-2 justify-center py-16 text-sm text-zinc-500">
+            <span className="size-3.5 rounded-full border-2 border-white/10 border-t-purple animate-spin" />
+            Loading workspaces…
+          </div>
+        )}
+
+        {state.kind === "error" && (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <AlertCircle className="size-5 text-destructive" />
+            <p className="text-sm text-zinc-400">{state.message}</p>
+            <Button variant="ghost" size="sm" onClick={retry}>
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {state.kind === "ready" && rows.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <div className="size-11 rounded-xl bg-purple/8 border border-purple/10 flex items-center justify-center">
+              <FolderOpen className="size-5 text-purple/80" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">No workspaces yet</p>
+              <p className="text-xs text-zinc-500 mt-1">
+                Create one to pick a repository, a pane layout and its agents.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+              className="gap-1.5 bg-purple hover:bg-purple-dark text-white text-xs"
+            >
+              <Plus className="size-3.5" />
+              New Workspace
+            </Button>
+          </div>
+        )}
+
         <div className="grid gap-2">
-          {mockWorkspaces.map((ws) => (
+          {rows.map((ws) => (
             <Link key={ws.id} href={`/workspace/${ws.id}`}>
               <div className="group relative flex items-center gap-4 p-4 rounded-xl card-surface hover:border-purple/20 transition-all duration-300 cursor-pointer">
                 <div className="size-11 rounded-xl bg-purple/8 border border-purple/10 flex items-center justify-center shrink-0 group-hover:bg-purple/12 group-hover:scale-105 transition-all duration-300">
@@ -122,33 +217,25 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-foreground group-hover:text-purple-light transition-colors">
+                    <span className="text-sm font-semibold text-foreground group-hover:text-purple-light transition-colors truncate">
                       {ws.name}
                     </span>
-                    <div className="flex items-center gap-1">
-                      <div className={`size-1.5 rounded-full ${statusColors[ws.status].dot}`} />
-                      <span className="text-[10px] text-zinc-600">{statusColors[ws.status].label}</span>
-                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
-                    <span className="flex items-center gap-1">
+                  <div className="flex items-center gap-3 text-xs text-zinc-500 min-w-0">
+                    <span className="flex items-center gap-1 min-w-0">
+                      <Boxes className="size-3 text-purple/60 shrink-0" />
+                      <span className="truncate">{ws.github_repo}</span>
+                    </span>
+                    <span className="w-px h-3 bg-white/[0.06] shrink-0" />
+                    <span className="flex items-center gap-1 shrink-0">
                       <GitBranch className="size-3 text-purple/60" />
-                      {ws.branch}
+                      {ws.github_branch}
                     </span>
-                    <span className="w-px h-3 bg-white/[0.06]" />
-                    <span className="flex items-center gap-1">
+                    <span className="w-px h-3 bg-white/[0.06] shrink-0" />
+                    <span className="flex items-center gap-1 shrink-0">
                       <Clock className="size-3" />
-                      {ws.updatedAt}
+                      {relativeTime(ws.updated_at)}
                     </span>
-                    {ws.language && (
-                      <>
-                        <span className="w-px h-3 bg-white/[0.06]" />
-                        <span className={`flex items-center gap-1 ${languageColors[ws.language] || "text-zinc-400"}`}>
-                          <Code2 className="size-3" />
-                          {ws.language}
-                        </span>
-                      </>
-                    )}
                   </div>
                 </div>
                 <ArrowRight className="size-4 text-zinc-600 group-hover:text-purple group-hover:translate-x-0.5 transition-all duration-300 shrink-0" />
@@ -162,20 +249,9 @@ export default function DashboardPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onCreated={(draft) => {
-          // Hand the chosen layout to the workspace route, which reads and
-          // clears it on mount.
-          try {
-            localStorage.setItem(
-              "aingespace:pending-layout",
-              JSON.stringify({
-                terminalCount: draft.terminalCount,
-                layoutId: draft.layoutId,
-                agentIds: draft.agentIds,
-              })
-            )
-          } catch {
-            // Private mode / storage disabled — the workspace still opens.
-          }
+          // The layout used to be smuggled to the workspace route through
+          // localStorage because the POST body dropped it. It is a column now,
+          // so the route reads it back from the workspace itself.
           router.push(`/workspace/${draft.id}`)
         }}
       />

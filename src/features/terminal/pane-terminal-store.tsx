@@ -58,11 +58,20 @@ type PaneTreeAction =
   | { type: "DUPLICATE"; payload: { paneId: string; terminalId: string } }
   | { type: "SET_ACTIVE"; payload: { terminalId: string } }
   | { type: "INIT_PANE"; payload: { paneId: string; terminalId: string; name: string } }
+  | { type: "HYDRATE_PANES"; payload: { panes: HydratedPane[] } }
   | {
       type: "RESIZE_SPLIT"
       payload: { paneId: string; nodeId: string; sizes: number[] }
     }
   | { type: "DISPOSE_PANES"; payload: { paneIds: string[] } }
+
+/** One pane restored from the database, ready to be dropped into `trees`. */
+export interface HydratedPane {
+  paneId: string
+  tree: PaneTerminalNode
+  /** `panes_aingespace.name_seq` — how far "Terminal A, B, C…" had got. */
+  nameSeq?: number
+}
 
 let termCounter = 0
 function nextTermId() {
@@ -72,6 +81,107 @@ function nextTermId() {
 let nodeCounter = 0
 function nextNodeId() {
   return `node-${++nodeCounter}`
+}
+
+const TERM_ID_RE = /^bm-term-(\d+)$/
+const NODE_ID_RE = /^node-(\d+)$/
+
+/**
+ * Pushes both counters past every id in a restored tree.
+ *
+ * They are module state and start at zero on every page load, so a tree that
+ * comes back from the database already holding `bm-term-5` would hand the next
+ * split `bm-term-1` — an id that is already in the tree. Two leaves would then
+ * share one PTY, and closing either would tear the shell out from under the
+ * other. Called from the reducer rather than left to the caller, because a
+ * caller that forgets produces a bug that only shows up after a reload.
+ */
+function reserveIds(node: PaneTerminalNode): void {
+  const nodeMatch = NODE_ID_RE.exec(node.id)
+  if (nodeMatch) nodeCounter = Math.max(nodeCounter, Number(nodeMatch[1]))
+
+  if (node.type === "leaf") {
+    const termMatch = TERM_ID_RE.exec(node.terminalId)
+    if (termMatch) termCounter = Math.max(termCounter, Number(termMatch[1]))
+    return
+  }
+  for (const child of node.children) reserveIds(child)
+}
+
+/**
+ * The tree a brand new pane starts with.
+ *
+ * Exported so a pane can be written to the database at the moment it is
+ * created: the row needs the tree, and the tree needs ids from the same
+ * counters everything else draws from.
+ */
+export function makeInitialTree(name = "Terminal A"): TerminalLeaf {
+  return { type: "leaf", id: nextNodeId(), terminalId: nextTermId(), name }
+}
+
+/** Matches the CHECK constraint's ceiling and the reducer's recursive walkers. */
+const MAX_TREE_DEPTH = 8
+
+/**
+ * Shape check for a `panes_aingespace.tree` value.
+ *
+ * The API validates this with zod on the way in, but a row written by an older
+ * build — or edited by hand in the Supabase dashboard — must not be able to
+ * crash the recursive walkers here. Deliberately zod-free: this runs in the
+ * browser on every load, and importing the schema module would pull zod into
+ * the client bundle with it.
+ */
+export function parseTree(value: unknown, depth = 0): PaneTerminalNode | null {
+  if (depth >= MAX_TREE_DEPTH) return null
+  if (typeof value !== "object" || value === null) return null
+
+  const node = value as Record<string, unknown>
+  if (typeof node.id !== "string" || node.id.length === 0) return null
+
+  if (node.type === "leaf") {
+    if (typeof node.terminalId !== "string" || node.terminalId.length === 0) {
+      return null
+    }
+    if (typeof node.name !== "string" || node.name.trim().length === 0) {
+      return null
+    }
+    return {
+      type: "leaf",
+      id: node.id,
+      terminalId: node.terminalId,
+      name: node.name,
+    }
+  }
+
+  if (node.type !== "split") return null
+  if (node.direction !== "horizontal" && node.direction !== "vertical") {
+    return null
+  }
+  if (!Array.isArray(node.children) || !Array.isArray(node.sizes)) return null
+  // Parallel arrays: a length mismatch is the desync that makes every child
+  // wear its neighbour's width.
+  if (node.children.length < 2) return null
+  if (node.children.length !== node.sizes.length) return null
+
+  const children: PaneTerminalNode[] = []
+  for (const child of node.children) {
+    const parsed = parseTree(child, depth + 1)
+    if (!parsed) return null
+    children.push(parsed)
+  }
+
+  const sizes = node.sizes.map((size) =>
+    typeof size === "number" && Number.isFinite(size) && size > 0 ? size : 0
+  )
+  if (sizes.some((size) => size === 0)) return null
+
+  return {
+    type: "split",
+    id: node.id,
+    direction: node.direction,
+    children,
+    sizes: normalizeSizes(sizes),
+  }
 }
 
 /** "Terminal A".."Terminal Z", then "Terminal AA" — never runs out. */
@@ -260,6 +370,42 @@ function paneReducer(
       }
     }
 
+    case "HYDRATE_PANES": {
+      const { panes } = action.payload
+      if (panes.length === 0) return state
+
+      // Every pane in a workspace lands in one dispatch on purpose. The
+      // provider's GC runs on each change to `trees` and disposes any instance
+      // that is not in one of them, so hydrating pane by pane would sweep away
+      // the terminals of panes whose response had not arrived yet.
+      const trees = { ...state.trees }
+      const maximized = { ...state.maximized }
+      const nameSeq = { ...state.nameSeq }
+
+      for (const pane of panes) {
+        reserveIds(pane.tree)
+        trees[pane.paneId] = pane.tree
+        // Maximize is a view flag, not layout — a restored pane opens whole.
+        maximized[pane.paneId] = null
+        nameSeq[pane.paneId] = Math.max(
+          pane.nameSeq ?? 1,
+          countLeaves(pane.tree)
+        )
+      }
+
+      const firstTerminal = collectTerminals(panes[0].tree)[0]?.id ?? null
+
+      return {
+        ...state,
+        trees,
+        maximized,
+        nameSeq,
+        // Same rule as INIT_PANE: loading a workspace in the background must
+        // not pull the caret out of the terminal being typed in.
+        activeTerminalId: state.activeTerminalId ?? firstTerminal,
+      }
+    }
+
     case "SPLIT": {
       const { paneId, terminalId, direction } = action.payload
       const tree = state.trees[paneId]
@@ -437,6 +583,7 @@ function paneReducer(
 
 export interface PaneTerminalActions {
   initPane: (paneId: string, terminalId: string, name: string) => void
+  hydratePanes: (panes: HydratedPane[]) => void
   splitTerminal: (
     paneId: string,
     terminalId: string,
@@ -478,6 +625,8 @@ export function PaneTerminalProvider({ children }: { children: ReactNode }) {
     () => ({
       initPane: (paneId, terminalId, name) =>
         dispatch({ type: "INIT_PANE", payload: { paneId, terminalId, name } }),
+      hydratePanes: (panes) =>
+        dispatch({ type: "HYDRATE_PANES", payload: { panes } }),
       splitTerminal: (paneId, terminalId, direction) =>
         dispatch({ type: "SPLIT", payload: { paneId, terminalId, direction } }),
       closeTerminal: (paneId, terminalId) =>

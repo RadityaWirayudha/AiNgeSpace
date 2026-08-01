@@ -1,9 +1,13 @@
 # Handoff — Database Supabase AiNgeSpace
 
 **Sesi sebelumnya:** review menyeluruh project + rewrite skema database.
-**Status:** skema dan seluruh route handler sudah selesai dan `npm run typecheck`
-lulus bersih. Migration **belum dijalankan** ke Supabase, dan UI **belum**
-membaca/menulis tabel baru. Itu pekerjaanmu.
+**Status:** skema, seluruh route handler, **dan UI (Tahap B–F)** sudah selesai;
+`npm run typecheck` lulus bersih. Yang tersisa cuma dua, keduanya menunggu user:
+**Tahap A** (migration belum pernah dijalankan ke Supabase — dan destruktif) dan
+**Tahap G** (keputusan soal tabel preferensi per-user).
+
+> Handoff ini akhirnya **tidak jadi dioper** — Tahap B–F dikerjakan di sesi yang
+> sama. Dokumen ini dipertahankan karena §2 dan §5 masih jadi acuan.
 
 ---
 
@@ -228,57 +232,39 @@ select count(*) from pg_policies where schemaname = 'public';
 -- harus 0 — ini disengaja, baca §2
 ```
 
-### Tahap B — Sambungkan `BridgeMindLayout` ke database
+### Tahap B–F — ✅ SELESAI (dikerjakan sendiri, handoff dibatalkan)
 
-Sekarang `src/features/workspace/BridgeMindLayout.tsx` masih memakai konstanta
-`initialWorkspaces` (workspace "Swarm" dan "GPT 5.5" yang di-hardcode). Semua
-pane dan pohon terminal hidup di memori dan hilang saat reload.
+Ringkasnya, plus file yang lahir dari situ:
 
-Yang perlu dikerjakan:
-
-1. **Muat** `GET /api/workspaces`, lalu `GET /api/panes?workspaceId=` untuk
-   workspace aktif. Ganti `initialWorkspaces` dengan hasilnya.
-2. **Hidrasi pohon** ke `pane-terminal-store`. Butuh action baru, mis.
-   `HYDRATE_PANE { paneId, tree, nameSeq }`, karena `INIT_PANE` yang ada hanya
-   membuat satu leaf kosong.
-3. **Simpan pohon** dengan `PATCH /api/panes/[id]` setiap `state.trees[paneId]`
-   berubah. **Wajib di-debounce** (~400 ms) — `RESIZE_SPLIT` menembak di setiap
-   frame drag; tanpa debounce satu tarikan splitter jadi puluhan request.
-4. **Buat baris pane** lewat `POST /api/panes` di `addPaneTo`, dan
-   `DELETE /api/panes/[id]` di `closePane`.
-5. `togglePin` → `PATCH /api/panes/[id] { pinned }`.
-
-### Tahap C — Persistensi urutan sidebar
-`onReorderWorkspaces` di `BridgeMindLayout` sudah bekerja di memori tapi
-urutannya hilang saat reload. Endpoint-nya sudah siap:
-`PATCH /api/workspaces { orderedIds: [...] }`.
-
-### Tahap D — Dashboard masih mock
-`src/app/dashboard/page.tsx` merender `mockWorkspaces` (3 workspace hardcode) dan
-tiga kartu statistik dengan angka hardcode (`"3"`, `"1"`, `"2.4 GB"`). Ganti
-daftarnya dengan `GET /api/workspaces`. Untuk kartu statistik: `Workspaces` bisa
-dari jumlah baris, tapi `Active` dan `Storage` **tidak punya sumber data** —
-diskusikan dengan user apakah dihapus atau dihitung dari sesuatu yang nyata.
-
-### Tahap E — Buang hack `localStorage`
-Setelah `layout_preset` benar-benar dibaca dari database, dua tempat ini bisa
-disederhanakan:
-- `src/app/dashboard/page.tsx` menulis `"aingespace:pending-layout"`.
-- `src/app/workspace/[id]/page.tsx` membacanya lewat `useSyncExternalStore`
-  dengan `Map` memoisasi supaya `getSnapshot` stabil.
-
-Baca komentarnya dulu sebelum menghapus — ada alasan hidrasi yang halus di sana
-(localStorage tidak boleh disentuh saat render).
-
-### Tahap F — Environment Variables Manager belum punya UI
-Route-nya lengkap (`GET`/`POST`/`DELETE` + `/decrypt`) tapi **tidak ada satu
-komponen pun yang memanggilnya**. `v1.md` mendeskripsikan alurnya:
-baca `.env.example` hasil clone → user isi nilainya → simpan terenkripsi →
-inject ke environment PTY saat `npm run dev`.
-
-Perhatikan: `/decrypt` sekarang bisa mengembalikan `{ value: null, error:
-"decrypt_failed" }` untuk baris yang ditulis dengan `ENCRYPTION_KEY` lama. UI
-harus menandai baris itu, bukan menampilkannya sebagai string kosong.
+- **B — `BridgeMindLayout` tersambung ke database.** `initialWorkspaces` hilang.
+  Workspace dimuat dari `GET /api/workspaces`; pane menyusul lewat
+  `GET /api/panes?workspaceId=` saat workspace pertama kali diaktifkan. Pohon
+  dihidrasi lewat action baru `HYDRATE_PANES` — jamak, satu dispatch untuk satu
+  workspace, karena GC-nya menyapu terminal yang tidak ada di `trees` (§5.2).
+  Penulisan pohon di-debounce 400 ms di `src/features/workspace/use-tree-sync.ts`,
+  plus flush `keepalive` saat `pagehide`.
+  Baru: `src/features/workspace/workspace-api.ts`, `use-tree-sync.ts`,
+  `src/lib/uuid.ts`, `src/lib/workspace/layouts.ts`.
+- **C — urutan sidebar tersimpan** lewat `PATCH /api/workspaces { orderedIds }`.
+  Request-nya sengaja di luar updater `setWorkspaces`: StrictMode menjalankan
+  updater dua kali.
+- **D — dashboard tidak mock lagi.** Daftar dari `GET /api/workspaces`. Kartu
+  `Active` dan `Storage` **dihapus** karena memang tidak punya sumber data;
+  penggantinya `Repositories` (jumlah `github_repo` unik) dan `Last active`
+  (`updated_at` terbaru, lewat `src/lib/format/relative-time.ts`).
+- **E — `"aingespace:pending-layout"` dibuang** dari kedua sisi. `layout_preset`
+  sekarang kolom, dan `/workspace/[id]` membacanya lewat
+  `GET /api/workspaces/[id]` → `terminalCountFor()`.
+- **F — Environment Variables Manager ada UI-nya.**
+  `src/components/EnvVarsDialog.tsx`, dibuka dari context menu baris workspace di
+  sidebar (`onOpenEnvVars`). Nilai terenkripsi tidak pernah ikut saat dialog
+  dibuka — `/decrypt` hanya dipanggil kalau user menekan "Tampilkan nilai" atau
+  mengubah satu baris, dan menutup reveal membuang plaintext dari memori. Baris
+  `{ value: null, error: "decrypt_failed" }` ditandai sebagai peringatan, bukan
+  string kosong. Workspace yang belum tersimpan di server ditolak di depan, sebab
+  belum punya baris untuk digantungi.
+  Sisa dari deskripsi `v1.md` yang **belum** dikerjakan: membaca `.env.example`
+  hasil clone, dan menyuntikkan variabel ke environment PTY.
 
 ### Tahap G — Keputusan yang menunggu user: preferensi per-user
 Ini **sengaja tidak** dibuatkan tabel, dan user perlu memutuskan.

@@ -2,7 +2,30 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
 import { encrypt } from "@/lib/supabase/encryption"
+import { isUuid } from "@/lib/uuid"
 import { z } from "zod"
+
+/**
+ * Every handler here is scoped to a workspace the caller owns. A malformed id
+ * is rejected before the query: `.eq("id", …)` against a uuid column makes
+ * Postgres reject the comparison outright, which turned a plain 404 into a 500.
+ */
+async function ownsWorkspace(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  workspaceId: string
+): Promise<boolean> {
+  if (!isUuid(workspaceId)) return false
+
+  const { data } = await supabase
+    .from("workspaces_aingespace")
+    .select("id")
+    .eq("id", workspaceId)
+    .eq("clerk_user_id", userId)
+    .maybeSingle()
+
+  return !!data
+}
 
 const upsertEnvSchema = z.object({
   // Matches env_vars_aingespace_key_format. Rejecting "npm run dev" here means
@@ -23,14 +46,7 @@ export async function GET(
     const { workspaceId } = await params
     const supabase = createServerClient()
 
-    const { data: workspace } = await supabase
-      .from("workspaces_aingespace")
-      .select("id")
-      .eq("id", workspaceId)
-      .eq("clerk_user_id", userId)
-      .maybeSingle()
-
-    if (!workspace) {
+    if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
@@ -65,14 +81,7 @@ export async function POST(
 
     const supabase = createServerClient()
 
-    const { data: workspace } = await supabase
-      .from("workspaces_aingespace")
-      .select("id")
-      .eq("id", workspaceId)
-      .eq("clerk_user_id", userId)
-      .maybeSingle()
-
-    if (!workspace) {
+    if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 
@@ -116,20 +125,15 @@ export async function DELETE(
     const { searchParams } = new URL(request.url)
     const envId = searchParams.get("id")
 
-    if (!envId) {
+    // Same reason as the workspace id: a non-uuid reaching `.eq("id", …)` is a
+    // 500 from Postgres, not the 400 the caller deserves.
+    if (!envId || !isUuid(envId)) {
       return NextResponse.json({ error: "id is required" }, { status: 400 })
     }
 
     const supabase = createServerClient()
 
-    const { data: workspace } = await supabase
-      .from("workspaces_aingespace")
-      .select("id")
-      .eq("id", workspaceId)
-      .eq("clerk_user_id", userId)
-      .maybeSingle()
-
-    if (!workspace) {
+    if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
 

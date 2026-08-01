@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
+import { LAYOUT_PRESET_IDS } from "@/lib/workspace/layouts"
+import { isUuid } from "@/lib/uuid"
 import { z } from "zod"
-
-const LAYOUT_PRESETS = ["l1", "l2v", "l2h", "l4", "l6", "l8"] as const
 
 const updateWorkspaceSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
     github_branch: z.string().trim().min(1).max(255).optional(),
     local_path: z.string().nullable().optional(),
-    layout_preset: z.enum(LAYOUT_PRESETS).optional(),
+    layout_preset: z.enum(LAYOUT_PRESET_IDS).optional(),
     agent_ids: z.array(z.string().min(1).max(64)).max(32).optional(),
   })
   // An empty body used to produce an UPDATE with no columns, which PostgREST
@@ -26,6 +26,12 @@ export async function GET(
   try {
     const userId = await getAuthUserId()
     const { id } = await params
+    // A local-only workspace id ("local-3") never reaches the database as a
+    // uuid comparison — PostgreSQL rejects the literal and the catch below
+    // would report a 500 for what is plainly a 404.
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
+    }
     const supabase = createServerClient()
 
     // maybeSingle, not single: a workspace that does not exist (or belongs to
@@ -59,6 +65,9 @@ export async function PATCH(
   try {
     const userId = await getAuthUserId()
     const { id } = await params
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
+    }
     const body = await request.json()
     const parsed = updateWorkspaceSchema.parse(body)
 
@@ -96,6 +105,9 @@ export async function DELETE(
   try {
     const userId = await getAuthUserId()
     const { id } = await params
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
+    }
     const supabase = createServerClient()
 
     // Panes and env vars go with the workspace via ON DELETE CASCADE.

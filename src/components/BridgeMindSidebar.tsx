@@ -18,6 +18,7 @@ import {
   ChevronsLeft,
   ChevronsUpDown,
   Keyboard,
+  KeyRound,
   Pencil,
   Plus,
   Search,
@@ -61,6 +62,9 @@ interface BridgeMindSidebarProps {
   onClosePane?: (workspaceId: string, paneId: string) => void
   onRenameWorkspace?: (workspaceId: string, name: string) => void
   onDeleteWorkspace?: (workspaceId: string) => void
+  /** Context-menu only: environment variables are a per-workspace setting, not
+   *  something worth a permanent control in a 184px rail. */
+  onOpenEnvVars?: (workspaceId: string) => void
   /** Receives every id in its new order. Enables drag-to-reorder and Alt+↑/↓. */
   onReorderWorkspaces?: (orderedIds: string[]) => void
   className?: string
@@ -1386,6 +1390,7 @@ export function BridgeMindSidebar({
   onClosePane,
   onRenameWorkspace,
   onDeleteWorkspace,
+  onOpenEnvVars,
   onReorderWorkspaces,
   className,
 }: BridgeMindSidebarProps) {
@@ -1811,7 +1816,11 @@ export function BridgeMindSidebar({
   /* -- context menu -------------------------------------------------- */
 
   const hasRowMenu = Boolean(
-    onAddPane || onRenameWorkspace || onReorderWorkspaces || onDeleteWorkspace
+    onAddPane ||
+      onRenameWorkspace ||
+      onReorderWorkspaces ||
+      onDeleteWorkspace ||
+      onOpenEnvVars
   )
 
   const menuWorkspace = menu
@@ -1841,6 +1850,14 @@ export function BridgeMindSidebar({
         icon: Pencil,
         hint: "F2",
         onSelect: () => setRenamingId(workspaceId),
+      })
+    }
+    if (onOpenEnvVars) {
+      entries.push({
+        key: "env",
+        label: "Environment variables",
+        icon: KeyRound,
+        onSelect: () => onOpenEnvVars(workspaceId),
       })
     }
     if (onReorderWorkspaces) {
@@ -1880,6 +1897,7 @@ export function BridgeMindSidebar({
     onRenameWorkspace,
     onReorderWorkspaces,
     onDeleteWorkspace,
+    onOpenEnvVars,
     moveWorkspace,
   ])
 

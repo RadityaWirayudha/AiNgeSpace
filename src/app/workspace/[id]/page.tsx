@@ -1,43 +1,9 @@
 "use client"
 
-import { use, useSyncExternalStore, useCallback } from "react"
+import { use, useEffect, useState } from "react"
 import { WorkspaceView } from "@/features/workspace/WorkspaceView"
-
-interface PendingLayout {
-  terminalCount?: number
-}
-
-/** The pending layout is a one-shot handoff from the create dialog. It is read
- *  and cleared exactly once per workspace id, then memoised so that
- *  getSnapshot stays referentially stable across renders. */
-const resolved = new Map<string, number>()
-
-function readTerminalCount(id: string): number {
-  const cached = resolved.get(id)
-  if (cached !== undefined) return cached
-
-  let count = 1
-  try {
-    const raw = localStorage.getItem("aingespace:pending-layout")
-    if (raw) {
-      const config = JSON.parse(raw) as PendingLayout
-      localStorage.removeItem("aingespace:pending-layout")
-      if (
-        typeof config.terminalCount === "number" &&
-        Number.isFinite(config.terminalCount)
-      ) {
-        count = Math.min(8, Math.max(1, Math.trunc(config.terminalCount)))
-      }
-    }
-  } catch {
-    // Corrupt or unavailable storage — fall back to a single terminal.
-  }
-
-  resolved.set(id, count)
-  return count
-}
-
-const subscribe = () => () => {}
+import { fetchWorkspace } from "@/features/workspace/workspace-api"
+import { terminalCountFor } from "@/lib/workspace/layouts"
 
 export default function WorkspacePage({
   params,
@@ -46,11 +12,29 @@ export default function WorkspacePage({
 }) {
   const { id } = use(params)
 
-  // localStorage cannot be touched during render or on the server: the old
-  // version read *and mutated* it inline, so the server rendered 1 terminal
-  // while the client rendered N and the entry was consumed before commit.
-  const getSnapshot = useCallback(() => readTerminalCount(id), [id])
-  const terminalCount = useSyncExternalStore(subscribe, getSnapshot, () => null)
+  // The layout used to arrive through a one-shot "aingespace:pending-layout"
+  // entry in localStorage, which meant it was gone on the second visit and
+  // absent entirely on another machine. It is a column on the workspace row
+  // now, so the page just reads it back.
+  const [terminalCount, setTerminalCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchWorkspace(id)
+      .then((row) => {
+        if (!cancelled) setTerminalCount(terminalCountFor(row.layout_preset))
+      })
+      .catch(() => {
+        // An unsaved workspace (local-ws-N) 404s, and a signed-out user 401s.
+        // Neither is a reason to refuse to open a terminal.
+        if (!cancelled) setTerminalCount(1)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   if (terminalCount === null) {
     return (

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
+import { DEFAULT_LAYOUT_PRESET, LAYOUT_PRESET_IDS } from "@/lib/workspace/layouts"
 import { z } from "zod"
-
-const LAYOUT_PRESETS = ["l1", "l2v", "l2h", "l4", "l6", "l8"] as const
 
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -16,7 +15,7 @@ const createWorkspaceSchema = z.object({
   // The dialog has always collected these two; until now the POST body dropped
   // them, so the layout survived only in localStorage and the agent selection
   // was discarded outright.
-  layoutPreset: z.enum(LAYOUT_PRESETS).default("l1"),
+  layoutPreset: z.enum(LAYOUT_PRESET_IDS).default(DEFAULT_LAYOUT_PRESET),
   agentIds: z.array(z.string().min(1).max(64)).max(32).default([]),
 })
 

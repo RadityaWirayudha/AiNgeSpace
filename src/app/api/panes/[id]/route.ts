@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAuthUserId } from "@/lib/clerk/auth"
 import { createServerClient } from "@/lib/supabase/server"
 import { treeSchema, treeToJson } from "@/lib/panes/tree-schema"
+import { isUuid } from "@/lib/uuid"
 import type { Database } from "@/types/database"
 import { z } from "zod"
 
@@ -29,6 +30,10 @@ async function ownedPane(
   paneId: string,
   userId: string
 ) {
+  // PostgreSQL refuses to compare a malformed uuid literal against a uuid
+  // column, so an id like "pane-3" would surface as a 500 for what is a 404.
+  if (!isUuid(paneId)) return null
+
   const { data } = await supabase
     .from("panes_aingespace")
     .select("id, workspaces_aingespace!inner(clerk_user_id)")
