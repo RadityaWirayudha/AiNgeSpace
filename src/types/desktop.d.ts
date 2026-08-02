@@ -52,6 +52,11 @@ export interface DesktopBridge {
   /** Opens a URL in the user's real browser instead of inside the app window. */
   openExternal(url: string): Promise<boolean>
   /**
+   * Opens the OS folder picker and resolves to an absolute path, or null if the
+   * user cancelled. `defaultPath` only suggests where to start.
+   */
+  chooseDirectory(defaultPath?: string): Promise<string | null>
+  /**
    * Fires for every `aingespace://…` URL the OS hands to the app — currently the
    * sign-in ticket coming back from the browser. Returns an unsubscribe
    * function. A link that arrives before the renderer subscribes is buffered by

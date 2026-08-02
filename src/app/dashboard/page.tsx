@@ -5,12 +5,11 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Terminal,
-  GitBranch,
+  Folder,
   FolderOpen,
   Clock,
   ArrowRight,
   Plus,
-  Boxes,
   History,
   AlertCircle,
 } from "lucide-react"
@@ -22,6 +21,7 @@ import {
   type WorkspaceRow,
 } from "@/features/workspace/workspace-api"
 import { relativeTime } from "@/lib/format/relative-time"
+import { compactPath } from "@/lib/workspace/paths"
 
 type LoadState =
   | { kind: "loading" }
@@ -98,7 +98,11 @@ export default function DashboardPage() {
    * support — there is no liveness signal and no disk accounting in the schema.
    */
   const stats = useMemo(() => {
-    const repos = new Set(rows.map((row) => row.github_repo))
+    // Distinct folders, not workspaces: two workspaces on one checkout is a
+    // normal way to work, and counting them twice would say nothing.
+    const folders = new Set(
+      rows.map((row) => row.working_dir.trim()).filter(Boolean)
+    )
     const newest = rows.reduce<string | null>((latest, row) => {
       if (!latest) return row.updated_at
       return Date.parse(row.updated_at) > Date.parse(latest)
@@ -114,9 +118,9 @@ export default function DashboardPage() {
         color: "text-purple",
       },
       {
-        icon: Boxes,
-        label: "Repositories",
-        value: String(repos.size),
+        icon: Folder,
+        label: "Working folders",
+        value: String(folders.size),
         color: "text-blue-400",
       },
       {
@@ -194,7 +198,8 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold">No workspaces yet</p>
               <p className="text-xs text-zinc-500 mt-1">
-                Create one to pick a repository, a pane layout and its agents.
+                Create one to pick a working folder, a pane layout and its
+                agents.
               </p>
             </div>
             <Button
@@ -222,14 +227,16 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-zinc-500 min-w-0">
-                    <span className="flex items-center gap-1 min-w-0">
-                      <Boxes className="size-3 text-purple/60 shrink-0" />
-                      <span className="truncate">{ws.github_repo}</span>
-                    </span>
-                    <span className="w-px h-3 bg-white/[0.06] shrink-0" />
-                    <span className="flex items-center gap-1 shrink-0">
-                      <GitBranch className="size-3 text-purple/60" />
-                      {ws.github_branch}
+                    {/* compactPath keeps the tail, which is the part that
+                        identifies the folder; the full path stays on hover. */}
+                    <span
+                      className="flex items-center gap-1 min-w-0"
+                      title={ws.working_dir}
+                    >
+                      <Folder className="size-3 text-purple/60 shrink-0" />
+                      <span className="truncate font-mono">
+                        {compactPath(ws.working_dir)}
+                      </span>
                     </span>
                     <span className="w-px h-3 bg-white/[0.06] shrink-0" />
                     <span className="flex items-center gap-1 shrink-0">

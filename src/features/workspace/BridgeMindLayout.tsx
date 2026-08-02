@@ -24,6 +24,7 @@ import {
 } from "@/features/terminal/PaneTerminalManager"
 import { ShortcutsDialogProvider } from "@/components/KeyboardShortcutsDialog"
 import { newUuid } from "@/lib/uuid"
+import { folderName } from "@/lib/workspace/paths"
 import { cn } from "@/lib/utils"
 import { useTreeSync } from "./use-tree-sync"
 import {
@@ -326,10 +327,13 @@ function BridgeMindInner() {
 
   const handleWorkspaceCreated = useCallback(
     (draft: WorkspaceDraft) => {
+      // The folder name, not the whole path: a pane title has a few dozen
+      // pixels, and "C:\Users\me\projects\api · pane 1" would be all prefix.
+      const folder = folderName(draft.workingDir)
       const created = Array.from({ length: draft.terminalCount }, (_, i) =>
         buildPane(
           { id: draft.id, persisted: draft.persisted, agentIds: draft.agentIds },
-          draft.repo ? `${draft.repo} · pane ${i + 1}` : `Pane ${i + 1}`
+          folder ? `${folder} · pane ${i + 1}` : `Pane ${i + 1}`
         )
       )
 

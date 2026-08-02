@@ -1,12 +1,20 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+} from "react"
 import {
   X,
   Check,
   ChevronRight,
   ChevronLeft,
   Folder,
+  FolderSearch,
   FolderTree,
   GitBranch,
   Terminal,
@@ -16,6 +24,7 @@ import {
   Brain,
   BookOpen,
   Settings2,
+  History,
   Bot,
   Cpu,
   Sparkles,
@@ -31,6 +40,11 @@ import {
   terminalCountFor,
   type LayoutPreset,
 } from "@/lib/workspace/layouts"
+import { applyWorkingDirInput, compactPath } from "@/lib/workspace/paths"
+import {
+  fetchWorkspaces,
+  type WorkspaceRow,
+} from "@/features/workspace/workspace-api"
 
 /* ------------------------------------------------------------------
    TYPES
@@ -38,8 +52,8 @@ import {
 export interface WorkspaceDraft {
   id: string
   name: string
-  repo: string
-  branch: string
+  /** Absolute folder every terminal in this workspace starts in. */
+  workingDir: string
   layoutId: string
   terminalCount: number
   agentIds: string[]
@@ -61,9 +75,12 @@ interface CreateWorkspaceDialogProps {
 -------------------------------------------------------------------*/
 const STEPS = [
   { id: 1, label: "Start" },
-  { id: 2, label: "Repo & Layout" },
+  { id: 2, label: "Layout" },
   { id: 3, label: "Agen" },
 ] as const
+
+/** How many workspaces the Recent grid shows. Two columns, so an even number. */
+const RECENT_LIMIT = 6
 
 /**
  * Deliberately UI only. Two of the three do not exist yet, and the workspace row
@@ -103,13 +120,19 @@ const DEFAULT_PRODUCT = "aingespace"
 // dialog used to know.
 const LAYOUTS = LAYOUT_PRESETS
 
+/**
+ * Not wired up yet — the tiles render disabled under a Coming Soon badge, so
+ * this list is labels only. The layout and agent set each preset used to apply
+ * were removed with it: an unread field is a promise the code does not keep, and
+ * the pairing will be redesigned when the feature is actually built.
+ */
 const PRESETS = [
-  { id: "p1", name: "Frontend", icon: Layers, layout: "l4", agents: ["a1", "a3"], desc: "UI, komponen, styling" },
-  { id: "p2", name: "Backend", icon: Server, layout: "l4", agents: ["a2"], desc: "API, layanan, data" },
-  { id: "p3", name: "Fullstack", icon: Boxes, layout: "l6", agents: ["a1", "a2"], desc: "Klien dan server bersamaan" },
-  { id: "p4", name: "AI Dev", icon: Brain, layout: "l6", agents: ["a1", "a2", "a4"], desc: "Model + aplikasi paralel" },
-  { id: "p5", name: "Riset", icon: BookOpen, layout: "l2v", agents: ["a4"], desc: "Notebook dan eksplorasi" },
-  { id: "p6", name: "DevOps", icon: Settings2, layout: "l8", agents: ["a2", "a5"], desc: "Infra, pipeline, pemantauan" },
+  { id: "p1", name: "Frontend", icon: Layers, desc: "UI, komponen, styling" },
+  { id: "p2", name: "Backend", icon: Server, desc: "API, layanan, data" },
+  { id: "p3", name: "Fullstack", icon: Boxes, desc: "Klien dan server bersamaan" },
+  { id: "p4", name: "AI Dev", icon: Brain, desc: "Model + aplikasi paralel" },
+  { id: "p5", name: "Riset", icon: BookOpen, desc: "Notebook dan eksplorasi" },
+  { id: "p6", name: "DevOps", icon: Settings2, desc: "Infra, pipeline, pemantauan" },
 ] as const
 
 const AGENTS = [
@@ -365,65 +388,128 @@ function StartStep({
 }
 
 /* ------------------------------------------------------------------
-   LANGKAH 2 — REPOSITORI (dirender bersama layout)
+   LANGKAH 2 — WORKING FOLDER (dirender bersama layout)
 -------------------------------------------------------------------*/
-function RepoFieldsStep({
-  repoUrl,
-  setRepoUrl,
-  branch,
-  setBranch,
-  showErrors,
+function WorkingFolderStep({
+  value,
+  onChange,
+  onCommit,
+  onBrowse,
+  error,
 }: {
-  repoUrl: string
-  setRepoUrl: (v: string) => void
-  branch: string
-  setBranch: (v: string) => void
-  showErrors: boolean
+  value: string
+  onChange: (v: string) => void
+  onCommit: () => void
+  /** Null on the web build: there is no OS dialog to open there. */
+  onBrowse: (() => void) | null
+  error?: string
 }) {
-  // Validate the shape rather than only checking for emptiness, so the repo is
-  // usable downstream.
-  const repoError =
-    showErrors && !/^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
-      ? "Gunakan format pengguna/nama-repo."
-      : undefined
+  return (
+    <Field
+      label="Working folder"
+      hint="Tempat semua terminal di workspace ini mulai berjalan."
+      error={error}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border transition-colors focus-within:border-purple/50",
+          error ? "border-destructive/60" : "border-border"
+        )}
+      >
+        <Folder className="size-3.5 text-zinc-500 shrink-0" />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          // Enter resolves `cd ..` in place rather than submitting the step —
+          // this field behaves like a prompt, which is what the hint promises.
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return
+            e.preventDefault()
+            onCommit()
+          }}
+          onBlur={onCommit}
+          placeholder="C:\Users\nama\projects\app"
+          spellCheck={false}
+          autoComplete="off"
+          aria-invalid={!!error}
+          aria-label="Working folder"
+          className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
+        />
+        {onBrowse && (
+          <button
+            type="button"
+            onClick={onBrowse}
+            aria-label="Pilih folder"
+            className="size-6 -mr-1 rounded-md shrink-0 flex items-center justify-center text-zinc-500 hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <FolderSearch className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Announces that the field also takes `cd`, which nothing else would. */}
+      <p className="mt-2 text-[11px] font-mono text-zinc-600">
+        <span className="text-zinc-700 select-none">&gt; </span>
+        cd ../other-project
+      </p>
+    </Field>
+  )
+}
+
+/* ------------------------------------------------------------------
+   LANGKAH 2 — RECENT
+-------------------------------------------------------------------*/
+function RecentSection({
+  items,
+  onPick,
+}: {
+  items: WorkspaceRow[]
+  onPick: (row: WorkspaceRow) => void
+}) {
+  // Nothing to recall yet. An empty box teaches a first-time user nothing.
+  if (items.length === 0) return null
 
   return (
-    <div className="space-y-5">
-      <Field
-        label="Repositori GitHub"
-        hint="Repo yang akan digunakan workspace ini."
-        error={repoError}
-      >
-        <div
-          className={cn(
-            "flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border transition-colors focus-within:border-purple/50",
-            repoError ? "border-destructive/60" : "border-border"
-          )}
-        >
-          <Folder className="size-3.5 text-zinc-500 shrink-0" />
-          <input
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder="user/nama-repo"
-            aria-invalid={!!repoError}
-            aria-label="Repositori GitHub"
-            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
-          />
+    <div>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <History className="size-3.5 text-zinc-500" />
+          <span className="text-[13px] font-semibold text-foreground">Recent</span>
+          <Badge variant="secondary" className="text-[11px] font-mono">
+            {items.length}
+          </Badge>
         </div>
-      </Field>
+        <span className="text-[11px] text-zinc-500">Workspace terakhir dibuka</span>
+      </div>
 
-      <Field label="Cabang">
-        <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg bg-secondary border border-border focus-within:border-purple/50 transition-colors">
-          <GitBranch className="size-3.5 text-zinc-500 shrink-0" />
-          <input
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            placeholder="main"
-            aria-label="Cabang"
-            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-zinc-600 font-mono"
-          />
-        </div>
-      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {items.map((row) => (
+          <button
+            key={row.id}
+            type="button"
+            onClick={() => onPick(row)}
+            // compactPath drops the head of the path; the full one stays
+            // reachable rather than being lost to make the card fit.
+            title={row.working_dir}
+            className="text-left flex items-center gap-2.5 p-3 rounded-lg cursor-pointer transition-colors border bg-secondary border-border hover:border-zinc-500"
+          >
+            <span className="size-6 rounded-md bg-zinc-800 shrink-0 flex items-center justify-center">
+              <Folder className="size-3.5 text-zinc-400" strokeWidth={1.9} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13px] font-semibold text-foreground truncate">
+                {row.name}
+              </span>
+              <span className="block text-[11px] text-zinc-500 font-mono truncate">
+                {compactPath(row.working_dir)}
+              </span>
+            </span>
+            <span className="text-[11px] font-mono text-zinc-500 shrink-0">
+              {terminalCountFor(row.layout_preset)}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -434,13 +520,13 @@ function RepoFieldsStep({
 function LayoutStep({
   layoutId,
   setLayoutId,
-  presetId,
-  applyPreset,
+  recent,
+  onPickRecent,
 }: {
   layoutId: string
   setLayoutId: (v: string) => void
-  presetId: string | null
-  applyPreset: (id: string) => void
+  recent: WorkspaceRow[]
+  onPickRecent: (row: WorkspaceRow) => void
 }) {
   const active = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
 
@@ -498,54 +584,40 @@ function LayoutStep({
         </div>
       </div>
 
+      <RecentSection items={recent} onPick={onPickRecent} />
+
       <div>
-        <span className="text-[13px] font-semibold text-foreground block mb-1">
-          Prasetel
-        </span>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[13px] font-semibold text-foreground">Presets</span>
+          <Badge
+            variant="outline"
+            className="text-[10px] border-zinc-700 text-zinc-500"
+          >
+            Coming Soon
+          </Badge>
+        </div>
         <p className="text-[11px] text-zinc-500 mb-3">
-          Layout dan agen dalam satu klik.
+          Layout dan agen dalam satu klik. Belum aktif.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PRESETS.map((p) => {
-            const on = presetId === p.id
             const Icon = p.icon
             return (
-              <button
+              <div
                 key={p.id}
-                type="button"
-                aria-pressed={on}
-                onClick={() => applyPreset(p.id)}
-                className={cn(
-                  "text-left flex flex-col gap-2 p-3 rounded-lg cursor-pointer transition-colors border",
-                  on
-                    ? "bg-purple/10 border-purple"
-                    : "bg-secondary border-border hover:border-zinc-500"
-                )}
+                aria-hidden="true"
+                className="text-left flex flex-col gap-2 p-3 rounded-lg border bg-secondary/40 border-border/60 opacity-50 select-none"
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={cn(
-                      "size-6 rounded-md flex items-center justify-center",
-                      on ? "bg-purple" : "bg-zinc-800"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "size-3.5",
-                        on ? "text-[#0E0E10]" : "text-zinc-400"
-                      )}
-                      strokeWidth={1.9}
-                    />
-                  </span>
-                  {on && <Check className="size-3.5 text-purple" strokeWidth={2.5} />}
-                </div>
+                <span className="size-6 rounded-md bg-zinc-800 flex items-center justify-center">
+                  <Icon className="size-3.5 text-zinc-400" strokeWidth={1.9} />
+                </span>
                 <div>
                   <div className="text-[13px] font-semibold text-foreground">
                     {p.name}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">{p.desc}</div>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
@@ -642,6 +714,13 @@ function AgentsStep({
  *  a timestamp id could not. */
 let localWorkspaceSeq = 0
 
+/** Whether the Electron bridge exists is settled before the renderer runs, so
+ *  there is nothing to subscribe to — but reading `window` during render still
+ *  has to go through a store to stay hydration-safe. */
+const NEVER_CHANGES = () => () => {}
+const readDesktop = () => !!window.bridgemind
+const NOT_DESKTOP = () => false
+
 export function CreateWorkspaceDialog({
   open,
   onClose,
@@ -652,27 +731,34 @@ export function CreateWorkspaceDialog({
   // Pre-selected: it is the only product that exists, so making the user click
   // it would be ceremony rather than a choice.
   const [productId, setProductId] = useState<string>(DEFAULT_PRODUCT)
-  const [repoUrl, setRepoUrl] = useState("")
-  const [branch, setBranch] = useState("main")
+  // Two states for one field. `workingDir` is the folder that has been accepted
+  // and is what `cd ../x` resolves against; `workingDirInput` is the raw text in
+  // the box, which is allowed to be a half-typed command. Resolving on every
+  // keystroke would rewrite the field the moment "cd " was typed.
+  const [workingDir, setWorkingDir] = useState("")
+  const [workingDirInput, setWorkingDirInput] = useState("")
   const [layoutId, setLayoutId] = useState("l1")
-  const [presetId, setPresetId] = useState<string | null>(null)
+  const [recent, setRecent] = useState<WorkspaceRow[]>([])
   const [agents, setAgents] = useState<Record<string, boolean>>({ a1: true })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const dialogRef = useRef<HTMLDivElement>(null)
 
+  const isDesktop = useSyncExternalStore(NEVER_CHANGES, readDesktop, NOT_DESKTOP)
+
   const reset = useCallback(() => {
     setStep(1)
     setShowErrors(false)
     setProductId(DEFAULT_PRODUCT)
-    setRepoUrl("")
-    setBranch("main")
+    setWorkingDir("")
+    setWorkingDirInput("")
     setLayoutId("l1")
-    setPresetId(null)
     setAgents({ a1: true })
     setSubmitting(false)
     setSubmitError(null)
+    // `recent` is deliberately left alone: the effect below refetches it on the
+    // next open, and clearing it here would only make the section flicker.
   }, [])
 
   const handleClose = useCallback(() => {
@@ -733,20 +819,75 @@ export function CreateWorkspaceDialog({
     return () => node.removeEventListener("keydown", onKeyDown)
   }, [open, step])
 
+  // The Recent list is the only reason this dialog reads existing workspaces.
+  // Fetching in a `.then` rather than the effect body keeps it clear of
+  // react-hooks/set-state-in-effect, which is an error in this repo.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+
+    fetchWorkspaces()
+      .then((rows) => {
+        if (cancelled) return
+        // The route orders by sort_order — the order the user dragged the
+        // sidebar into. "Recent" means time, so it is re-sorted here.
+        const byTime = [...rows].sort(
+          (a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)
+        )
+        setRecent(byTime.slice(0, RECENT_LIMIT))
+      })
+      .catch(() => {
+        // Recent is a shortcut, not a requirement. Signed out or offline, the
+        // section simply does not appear — it must never block creation.
+        if (!cancelled) setRecent([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
   const toggleAgent = useCallback((id: string) => {
     setAgents((prev) => ({ ...prev, [id]: !prev[id] }))
-    // Hand-editing agents means the selection no longer matches a preset.
-    setPresetId(null)
   }, [])
 
-  // Presets advertised an agent set but only ever applied the layout, so
-  // picking "AI Dev" silently left you with the default single agent.
-  const applyPreset = useCallback((id: string) => {
-    const preset = PRESETS.find((p) => p.id === id)
-    if (!preset) return
-    setPresetId(id)
-    setLayoutId(preset.layout)
-    setAgents(Object.fromEntries(preset.agents.map((a) => [a, true])))
+  /**
+   * What the field means right now. `applyWorkingDirInput` is idempotent for
+   * anything that is not a `cd`, so recomputing it every render is safe — and
+   * that is what makes "type a path, click Next without leaving the field" work
+   * without waiting for a blur to flush through React state.
+   */
+  const resolvedWorkingDir = useMemo(
+    () => applyWorkingDirInput(workingDir, workingDirInput),
+    [workingDir, workingDirInput]
+  )
+
+  /** Enter and blur only. Its job is to let the user *see* `cd ../x` turn into a
+   *  real path; validation and submit never depend on it having run. */
+  const commitWorkingDir = useCallback(() => {
+    setWorkingDir(resolvedWorkingDir)
+    setWorkingDirInput(resolvedWorkingDir)
+  }, [resolvedWorkingDir])
+
+  const browseForFolder = useCallback(() => {
+    const bridge = window.bridgemind
+    if (!bridge) return
+    void bridge.chooseDirectory(workingDir).then((picked) => {
+      if (!picked) return
+      setWorkingDir(picked)
+      setWorkingDirInput(picked)
+      setShowErrors(false)
+    })
+  }, [workingDir])
+
+  /** Fills the draft being created — it does not open the workspace that was
+   *  clicked. This is the "new workspace" dialog; opening an old one from here
+   *  would be a surprise. */
+  const pickRecent = useCallback((row: WorkspaceRow) => {
+    setWorkingDir(row.working_dir)
+    setWorkingDirInput(row.working_dir)
+    setLayoutId(row.layout_preset)
+    setShowErrors(false)
   }, [])
 
   const heading = useMemo(() => {
@@ -757,8 +898,8 @@ export function CreateWorkspaceDialog({
       }
     if (step === 2)
       return {
-        title: "Repo dan layout",
-        sub: "Hubungkan repo GitHub lalu tentukan jumlah panel terminal.",
+        title: "Layout",
+        sub: "Pilih folder kerja lalu tentukan jumlah panel terminal.",
       }
     return {
       title: "Tambah agen AI",
@@ -767,16 +908,20 @@ export function CreateWorkspaceDialog({
   }, [step])
 
   // Step 1 has nothing to validate: the product is always pre-selected and the
-  // name is generated by the server, so the repo on step 2 is the only field the
-  // user can get wrong.
-  const step2Valid = /^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
+  // name is generated by the server, so the working folder on step 2 is the only
+  // field the user can get wrong. Its shape is not checked here — only the
+  // machine running the shell can say whether a path is real.
+  const step2Valid = resolvedWorkingDir.length > 0
 
-  const handleLaunch = async () => {
+  /** `agentOverride` serves "Buka tanpa AI", which creates the workspace now
+   *  with no agents instead of walking through step 3. */
+  const handleLaunch = async (agentOverride?: string[]) => {
     setSubmitting(true)
     setSubmitError(null)
     try {
       const terminalCount = terminalCountFor(layoutId)
-      const agentIds = AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
+      const agentIds =
+        agentOverride ?? AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
 
       let workspaceId: string | null = null
       // The name is the server's to decide: it is the only side that can see
@@ -788,8 +933,7 @@ export function CreateWorkspaceDialog({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            githubRepo: repoUrl.trim(),
-            githubBranch: branch.trim() || "main",
+            workingDir: resolvedWorkingDir,
             // The layout and the agent selection used to stop here: the layout
             // was smuggled through localStorage and the agents were dropped
             // entirely, so reopening a workspace lost both.
@@ -823,8 +967,7 @@ export function CreateWorkspaceDialog({
       onCreated?.({
         id: workspaceId,
         name: name ?? "Workspace",
-        repo: repoUrl.trim(),
-        branch: branch.trim() || "main",
+        workingDir: resolvedWorkingDir,
         layoutId,
         terminalCount,
         agentIds,
@@ -894,22 +1037,23 @@ export function CreateWorkspaceDialog({
           )}
           {step === 2 && (
             <div className="space-y-6">
-              <RepoFieldsStep
-                repoUrl={repoUrl}
-                setRepoUrl={setRepoUrl}
-                branch={branch}
-                setBranch={setBranch}
-                showErrors={showErrors}
+              <WorkingFolderStep
+                value={workingDirInput}
+                onChange={setWorkingDirInput}
+                onCommit={commitWorkingDir}
+                onBrowse={isDesktop ? browseForFolder : null}
+                error={
+                  showErrors && !step2Valid
+                    ? "Pilih folder tempat terminal akan dijalankan."
+                    : undefined
+                }
               />
               <div className="h-px bg-bm-border" />
               <LayoutStep
                 layoutId={layoutId}
-                setLayoutId={(id) => {
-                  setLayoutId(id)
-                  setPresetId(null)
-                }}
-                presetId={presetId}
-                applyPreset={applyPreset}
+                setLayoutId={setLayoutId}
+                recent={recent}
+                onPickRecent={pickRecent}
               />
             </div>
           )}
@@ -939,28 +1083,28 @@ export function CreateWorkspaceDialog({
           </Button>
 
           <div className="flex items-center gap-2">
-            {/* "Lewati" used to call handleClose, throwing away everything the
-                user had entered. It now jumps to the last step instead. */}
+            {/* Not "skip": this creates the workspace now, with no agents. The
+                old button only jumped to the last step, where the primary
+                button was still waiting to be pressed. */}
             {step < 3 && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  // Skipping to the agents with an empty repo would post a body
-                  // the CHECK constraint rejects, and the user would land on a
-                  // local-only workspace without ever being told why.
+                  // Launching without a working folder would post a body zod
+                  // rejects, and the user would land on a local-only workspace
+                  // without ever being told why.
                   if (!step2Valid) {
                     setShowErrors(true)
                     setStep(2)
                     return
                   }
-                  setShowErrors(false)
-                  setStep(3)
+                  void handleLaunch([])
                 }}
                 disabled={submitting}
                 className="text-zinc-400"
               >
-                Lewati
+                Buka tanpa AI
               </Button>
             )}
             <Button
@@ -973,9 +1117,9 @@ export function CreateWorkspaceDialog({
               )}
             >
               {step === 1
-                ? "Berikut: repo & layout"
+                ? "Berikutnya: Layout"
                 : step === 2
-                  ? "Berikut: agen"
+                  ? "Berikutnya: Agen"
                   : submitting
                     ? "Membuat…"
                     : "Luncurkan workspace"}

@@ -112,6 +112,22 @@ function registerIpc(manager: PtyManager) {
       return false
     }
   })
+
+  // Backs the browse button on the workspace dialog's working-folder field.
+  // The renderer cannot see the filesystem, so picking a folder by hand is the
+  // one thing that field cannot do on its own.
+  ipcMain.handle(CH.chooseDirectory, async (_e, defaultPath?: string) => {
+    // Parented to the window so the sheet is modal to the app rather than a
+    // loose dialog that can end up behind it.
+    if (!mainWindow || mainWindow.isDestroyed()) return null
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openDirectory", "createDirectory"],
+      // A path that does not exist is ignored by Electron and the dialog falls
+      // back to the OS default, so a half-typed field needs no filtering here.
+      defaultPath: defaultPath?.trim() || undefined,
+    })
+    return canceled ? null : (filePaths[0] ?? null)
+  })
 }
 
 /** URLs that arrived before a renderer existed to receive them. */

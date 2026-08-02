@@ -85,6 +85,8 @@ const bridge: DesktopBridge = {
   },
   openExternal: (url: string): Promise<boolean> =>
     ipcRenderer.invoke(CH.openExternal, url),
+  chooseDirectory: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke(CH.chooseDirectory, defaultPath),
   onDeepLink: (cb: LinkCb) => {
     linkSubs.add(cb)
     if (pendingLink !== null) {
