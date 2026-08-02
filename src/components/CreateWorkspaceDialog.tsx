@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Folder,
+  FolderTree,
   GitBranch,
   Terminal,
   Layers,
@@ -59,10 +60,42 @@ interface CreateWorkspaceDialogProps {
    DATA
 -------------------------------------------------------------------*/
 const STEPS = [
-  { id: 1, label: "Repositori" },
-  { id: 2, label: "Layout" },
+  { id: 1, label: "Start" },
+  { id: 2, label: "Repo & Layout" },
   { id: 3, label: "Agen" },
 ] as const
+
+/**
+ * Deliberately UI only. Two of the three do not exist yet, and the workspace row
+ * has no column for this — a field that can only ever hold one value carries no
+ * information. Give it a column on the day a second product can actually be
+ * selected.
+ */
+const PRODUCTS = [
+  {
+    id: "aingespace",
+    name: "AiNgeSpace",
+    icon: Terminal,
+    desc: "Terminal paralel dengan agen di tiap panel.",
+    available: true,
+  },
+  {
+    id: "aingecommit",
+    name: "AiNgeCommit",
+    icon: GitBranch,
+    desc: "Alur commit dan review yang dibantu agen.",
+    available: false,
+  },
+  {
+    id: "aingeexplorer",
+    name: "AiNgExplorer",
+    icon: FolderTree,
+    desc: "Menjelajah berkas dan struktur proyek dari satu panel.",
+    available: false,
+  },
+] as const
+
+const DEFAULT_PRODUCT = "aingespace"
 
 // The presets themselves live in src/lib/workspace/layouts.ts, because the
 // database CHECK constraint and both workspace route handlers need the same
@@ -258,31 +291,95 @@ function Field({
   )
 }
 
-const inputCls =
-  "w-full h-9 px-3 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-zinc-600 outline-none focus:border-purple/50 transition-colors font-mono"
+/* ------------------------------------------------------------------
+   LANGKAH 1 — START
+-------------------------------------------------------------------*/
+function StartStep({
+  productId,
+  setProductId,
+}: {
+  productId: string
+  setProductId: (v: string) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label="Fitur" className="space-y-2">
+      {PRODUCTS.map((p) => {
+        const on = p.id === productId
+        const Icon = p.icon
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            // `disabled` also keeps these out of the dialog's focus trap, which
+            // filters on `button:not([disabled])`.
+            disabled={!p.available}
+            onClick={() => setProductId(p.id)}
+            className={cn(
+              "w-full text-left flex items-center gap-3 p-3.5 rounded-lg border transition-colors",
+              !p.available
+                ? "bg-secondary/40 border-border/60 opacity-60 cursor-not-allowed"
+                : on
+                  ? "bg-purple/10 border-purple cursor-pointer"
+                  : "bg-secondary border-border hover:border-zinc-500 cursor-pointer"
+            )}
+          >
+            <span
+              className={cn(
+                "size-8 rounded-lg shrink-0 flex items-center justify-center",
+                on ? "bg-purple" : "bg-zinc-800"
+              )}
+            >
+              <Icon
+                className={cn("size-3.5", on ? "text-[#0E0E10]" : "text-zinc-400")}
+                strokeWidth={1.9}
+              />
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[13px] font-semibold text-foreground">
+                  {p.name}
+                </span>
+                {!p.available && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] border-zinc-700 text-zinc-500"
+                  >
+                    Coming Soon
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[12px] text-zinc-500 mt-0.5">{p.desc}</p>
+            </div>
+
+            {on && (
+              <Check className="size-3.5 text-purple shrink-0" strokeWidth={2.5} />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 /* ------------------------------------------------------------------
-   LANGKAH 1 — REPOSITORI
+   LANGKAH 2 — REPOSITORI (dirender bersama layout)
 -------------------------------------------------------------------*/
-function RepositoryStep({
-  workspaceName,
-  setWorkspaceName,
+function RepoFieldsStep({
   repoUrl,
   setRepoUrl,
   branch,
   setBranch,
   showErrors,
 }: {
-  workspaceName: string
-  setWorkspaceName: (v: string) => void
   repoUrl: string
   setRepoUrl: (v: string) => void
   branch: string
   setBranch: (v: string) => void
   showErrors: boolean
 }) {
-  const nameError =
-    showErrors && !workspaceName.trim() ? "Nama workspace wajib diisi." : undefined
   // Validate the shape rather than only checking for emptiness, so the repo is
   // usable downstream.
   const repoError =
@@ -292,20 +389,6 @@ function RepositoryStep({
 
   return (
     <div className="space-y-5">
-      <Field
-        label="Nama workspace"
-        hint="Label untuk workspace ini di sidebar."
-        error={nameError}
-      >
-        <input
-          value={workspaceName}
-          onChange={(e) => setWorkspaceName(e.target.value)}
-          placeholder="proyek-saya"
-          aria-invalid={!!nameError}
-          className={cn(inputCls, nameError && "border-destructive/60")}
-        />
-      </Field>
-
       <Field
         label="Repositori GitHub"
         hint="Repo yang akan digunakan workspace ini."
@@ -346,7 +429,7 @@ function RepositoryStep({
 }
 
 /* ------------------------------------------------------------------
-   LANGKAH 2 — LAYOUT
+   LANGKAH 2 — LAYOUT (dirender di bawah field repositori)
 -------------------------------------------------------------------*/
 function LayoutStep({
   layoutId,
@@ -566,7 +649,9 @@ export function CreateWorkspaceDialog({
 }: CreateWorkspaceDialogProps) {
   const [step, setStep] = useState(1)
   const [showErrors, setShowErrors] = useState(false)
-  const [workspaceName, setWorkspaceName] = useState("")
+  // Pre-selected: it is the only product that exists, so making the user click
+  // it would be ceremony rather than a choice.
+  const [productId, setProductId] = useState<string>(DEFAULT_PRODUCT)
   const [repoUrl, setRepoUrl] = useState("")
   const [branch, setBranch] = useState("main")
   const [layoutId, setLayoutId] = useState("l1")
@@ -580,7 +665,7 @@ export function CreateWorkspaceDialog({
   const reset = useCallback(() => {
     setStep(1)
     setShowErrors(false)
-    setWorkspaceName("")
+    setProductId(DEFAULT_PRODUCT)
     setRepoUrl("")
     setBranch("main")
     setLayoutId("l1")
@@ -667,13 +752,13 @@ export function CreateWorkspaceDialog({
   const heading = useMemo(() => {
     if (step === 1)
       return {
-        title: "Pilih repositorimu",
-        sub: "Hubungkan repo GitHub dan beri nama workspace.",
+        title: "Start",
+        sub: "Pilih fitur yang dijalankan. Namanya dibuat otomatis.",
       }
     if (step === 2)
       return {
-        title: "Atur layout",
-        sub: "Pilih berapa banyak terminal yang berjalan berdampingan.",
+        title: "Repo dan layout",
+        sub: "Hubungkan repo GitHub lalu tentukan jumlah panel terminal.",
       }
     return {
       title: "Tambah agen AI",
@@ -681,9 +766,10 @@ export function CreateWorkspaceDialog({
     }
   }, [step])
 
-  const step1Valid =
-    workspaceName.trim().length > 0 &&
-    /^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
+  // Step 1 has nothing to validate: the product is always pre-selected and the
+  // name is generated by the server, so the repo on step 2 is the only field the
+  // user can get wrong.
+  const step2Valid = /^[\w.-]+\/[\w.-]+$/.test(repoUrl.trim())
 
   const handleLaunch = async () => {
     setSubmitting(true)
@@ -693,12 +779,15 @@ export function CreateWorkspaceDialog({
       const agentIds = AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
 
       let workspaceId: string | null = null
+      // The name is the server's to decide: it is the only side that can see
+      // every workspace the user owns, and "Workspace 3" is only correct
+      // relative to that list.
+      let name: string | null = null
       try {
         const res = await fetch("/api/workspaces", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: workspaceName.trim(),
             githubRepo: repoUrl.trim(),
             githubBranch: branch.trim() || "main",
             // The layout and the agent selection used to stop here: the layout
@@ -711,6 +800,7 @@ export function CreateWorkspaceDialog({
         if (res.ok) {
           const data = await res.json()
           workspaceId = data.id ?? null
+          name = data.name ?? null
         }
       } catch {
         // Offline or unauthenticated — fall back to a local-only workspace
@@ -722,11 +812,17 @@ export function CreateWorkspaceDialog({
       // being recognised as unbacked. A "local-" id says what it is, and
       // `persisted: false` tells the caller not to write anything for it.
       const persisted = workspaceId !== null
-      if (!workspaceId) workspaceId = `local-ws-${++localWorkspaceSeq}`
+      if (!workspaceId) {
+        const seq = ++localWorkspaceSeq
+        workspaceId = `local-ws-${seq}`
+        // Numbering it "Workspace N" would be a lie: this one is not in the list
+        // the server counts, so it would collide with the next real workspace.
+        name = `Workspace lokal ${seq}`
+      }
 
       onCreated?.({
         id: workspaceId,
-        name: workspaceName.trim(),
+        name: name ?? "Workspace",
         repo: repoUrl.trim(),
         branch: branch.trim() || "main",
         layoutId,
@@ -744,8 +840,8 @@ export function CreateWorkspaceDialog({
   }
 
   const goNext = () => {
-    if (step === 1 && !step1Valid) {
-      // The old build let you tab past an invalid step and only failed later.
+    // The old build let you tab past an invalid step and only failed later.
+    if (step === 2 && !step2Valid) {
       setShowErrors(true)
       return
     }
@@ -794,26 +890,28 @@ export function CreateWorkspaceDialog({
           </div>
 
           {step === 1 && (
-            <RepositoryStep
-              workspaceName={workspaceName}
-              setWorkspaceName={setWorkspaceName}
-              repoUrl={repoUrl}
-              setRepoUrl={setRepoUrl}
-              branch={branch}
-              setBranch={setBranch}
-              showErrors={showErrors}
-            />
+            <StartStep productId={productId} setProductId={setProductId} />
           )}
           {step === 2 && (
-            <LayoutStep
-              layoutId={layoutId}
-              setLayoutId={(id) => {
-                setLayoutId(id)
-                setPresetId(null)
-              }}
-              presetId={presetId}
-              applyPreset={applyPreset}
-            />
+            <div className="space-y-6">
+              <RepoFieldsStep
+                repoUrl={repoUrl}
+                setRepoUrl={setRepoUrl}
+                branch={branch}
+                setBranch={setBranch}
+                showErrors={showErrors}
+              />
+              <div className="h-px bg-bm-border" />
+              <LayoutStep
+                layoutId={layoutId}
+                setLayoutId={(id) => {
+                  setLayoutId(id)
+                  setPresetId(null)
+                }}
+                presetId={presetId}
+                applyPreset={applyPreset}
+              />
+            </div>
           )}
           {step === 3 && <AgentsStep enabled={agents} toggleAgent={toggleAgent} />}
 
@@ -848,11 +946,15 @@ export function CreateWorkspaceDialog({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  if (!step1Valid) {
+                  // Skipping to the agents with an empty repo would post a body
+                  // the CHECK constraint rejects, and the user would land on a
+                  // local-only workspace without ever being told why.
+                  if (!step2Valid) {
                     setShowErrors(true)
-                    setStep(1)
+                    setStep(2)
                     return
                   }
+                  setShowErrors(false)
                   setStep(3)
                 }}
                 disabled={submitting}
@@ -871,7 +973,7 @@ export function CreateWorkspaceDialog({
               )}
             >
               {step === 1
-                ? "Berikut: layout"
+                ? "Berikut: repo & layout"
                 : step === 2
                   ? "Berikut: agen"
                   : submitting

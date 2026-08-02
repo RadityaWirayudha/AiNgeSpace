@@ -121,15 +121,13 @@ create table public.workspaces_aingespace (
   clerk_user_id text        not null,
 
   name          text        not null,
-  -- Format "pemilik/repo", cocok dengan regex yang sudah divalidasi
-  -- CreateWorkspaceDialog dan skema zod di route handler. Dijaga juga di sini
-  -- supaya data busuk tidak bisa masuk lewat jalur lain.
-  github_repo   text        not null,
-  github_branch text        not null default 'main',
 
-  -- Path hasil clone di mesin ini. Nullable dan memang bersifat per-mesin:
-  -- workspace yang sama dibuka dari laptop lain akan punya path berbeda.
-  local_path    text,
+  -- Folder tempat terminal workspace ini mulai berjalan. Ini menggantikan
+  -- github_repo/github_branch: dialog pembuatan workspace tidak lagi meminta
+  -- repo GitHub, ia meminta folder lokal. Nilainya per-mesin — workspace yang
+  -- sama dibuka dari laptop lain akan menunjuk path berbeda — tapi tetap not
+  -- null karena tanpa folder, terminal tidak punya tempat untuk mulai.
+  working_dir   text        not null,
 
   -- id layout dari LAYOUTS di CreateWorkspaceDialog ("l1","l2v","l4",…).
   layout_preset text        not null default 'l1',
@@ -145,10 +143,12 @@ create table public.workspaces_aingespace (
 
   constraint workspaces_aingespace_name_not_blank
     check (length(btrim(name)) between 1 and 255),
-  constraint workspaces_aingespace_repo_format
-    check (github_repo ~ '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'),
-  constraint workspaces_aingespace_branch_not_blank
-    check (length(btrim(github_branch)) between 1 and 255),
+  -- Tidak ada regex path di sini dengan sengaja: bentuk path sah berbeda antara
+  -- Windows, macOS dan Linux, dan satu-satunya penentu yang sebenarnya adalah
+  -- apakah folder itu ada di mesin yang menjalankannya — sesuatu yang hanya
+  -- diketahui main process Electron (lihat isDirectory() di pty-manager.ts).
+  constraint workspaces_aingespace_working_dir_not_blank
+    check (length(btrim(working_dir)) between 1 and 4096),
   constraint workspaces_aingespace_layout_known
     check (layout_preset in ('l1', 'l2v', 'l2h', 'l4', 'l6', 'l8'))
 );

@@ -1,8 +1,22 @@
 # Handoff — Rombak Dialog "Buat Workspace"
 
-**Status pekerjaan ini: BELUM DIMULAI. Nol baris kode ditulis.**
-Yang sudah ada di dokumen ini adalah hasil pembacaan file, dua keputusan user
-yang sudah final, dan rencana yang tinggal dieksekusi.
+> 🔴 **SUDAH DIGANTI SEBAGIAN OLEH `buat-workspace-handoff-2.md`.** Pekerjaan
+> lanjutan (repo GitHub dibuang, diganti *working folder*; langkah 2 jadi
+> "Layout"; Recent + Presets Coming Soon; tombol footer baru) dijelaskan di sana.
+> **Semua bagian dokumen ini yang menyebut `github_repo`, `githubRepo`, `branch`,
+> atau `RepoFieldsStep` sudah tidak berlaku.** Baca handoff-2 lebih dulu.
+
+**Status pekerjaan ini: ✅ SELESAI DIEKSEKUSI.** Handoff akhirnya tidak jadi
+dioper — rencana di bawah dikerjakan sendiri. Lihat **§8** untuk catatan hasil
+eksekusi dan **§9** untuk dua permintaan lanjutan user yang sudah ikut
+dikerjakan (nama workspace otomatis, dan langkah 1 berganti nama jadi "Start").
+
+> ⚠️ §3 adalah rencana awal dan sebagian sudah **usang**: field "Nama workspace"
+> yang dijelaskan di sana sudah dihapus lagi, dan langkah 1 tidak lagi bernama
+> "Produk". §9 yang berlaku.
+
+Dokumen ini dipertahankan karena §1 (keputusan user), §4 (jebakan) dan §5
+(verifikasi) masih jadi acuan.
 
 File yang disentuh: **`src/components/CreateWorkspaceDialog.tsx` saja** (891 baris).
 Tidak ada perubahan skema database, tidak ada perubahan route handler.
@@ -44,7 +58,7 @@ Terjemahan ke pekerjaan konkret: **langkah 1 dari 3 yang sekarang bernama
 |---|---|
 | **AiNgeSpace** | satu-satunya yang bisa dipilih, jadi pilihan default |
 | **AiNgeCommit** | tampil di bawahnya, ditandai *Coming Soon*, tidak bisa dipilih |
-| **AiNgIDE** | sama |
+| **AiNgExplorer** | sama — semula "AiNgIDE", diganti user saat pengerjaan |
 
 Catatan ejaan: user menulis "Comming Soon". Yang ditulis ke UI adalah ejaan yang
 benar, **"Coming Soon"**.
@@ -155,24 +169,23 @@ const PRODUCTS = [
     available: false,
   },
   {
-    id: "aingeide",
-    name: "AiNgIDE",
-    icon: Braces,
-    desc: "Editor penuh di dalam workspace yang sama.",
+    id: "aingeexplorer",
+    name: "AiNgExplorer",
+    icon: FolderTree,
+    desc: "Menjelajah berkas dan struktur proyek dari satu panel.",
     available: false,
   },
 ] as const
 ```
 
-Ejaan nama produk: **AiNgeSpace**, **AiNgeCommit**, **AiNgIDE** — persis seperti
-yang user tulis. Perhatikan yang ketiga **tanpa "e"** setelah "AiNg".
+Ejaan nama produk: **AiNgeSpace**, **AiNgeCommit**, **AiNgExplorer** — persis
+seperti yang user tulis. Perhatikan yang ketiga **tanpa "e"** setelah "AiNg".
 
-`Terminal` dan `GitBranch` sudah diimpor di baris 10–11. **`Braces` belum** —
+`Terminal` dan `GitBranch` sudah diimpor di baris 10–11. **`FolderTree` belum** —
 tambahkan ke daftar import. Sudah diverifikasi ada di
 `node_modules/lucide-react/dist/lucide-react.d.ts` versi ini (begitu juga
-`Code`, `Code2`, `CodeXml`, `SquareTerminal`, `PanelsTopLeft`,
-`GitCommitVertical` kalau mau alternatif). Lihat §5.1 — jangan menebak nama
-ikon.
+`Braces`, `Compass`, `FolderSearch`, `FileSearch`, `Telescope` kalau mau
+alternatif). Lihat §4.1 — jangan menebak nama ikon.
 
 ### 3.3 `ProductStep` — komponen baru, gantikan tempat `RepositoryStep` sebagai langkah 1
 
@@ -401,8 +414,8 @@ Uji manual (`npm run dev:desktop`):
 
 1. Buka dialog. Langkah 1 menampilkan "Produk" di stepper, field nama, dan tiga
    produk. AiNgeSpace terpilih.
-2. Klik AiNgeCommit dan AiNgIDE — **tidak terjadi apa-apa**, keduanya bertuliskan
-   "Coming Soon".
+2. Klik AiNgeCommit dan AiNgExplorer — **tidak terjadi apa-apa**, keduanya
+   bertuliskan "Coming Soon".
 3. Tab dari field nama: fokus harus melewati kedua produk yang mati.
 4. Kosongkan nama → "Berikut: repo & layout" menampilkan error, tidak berpindah.
 5. Isi nama, lanjut. Langkah 2 menampilkan repo + cabang **dan** pilihan layout.
@@ -443,3 +456,116 @@ Branch `master`, **working tree bersih** saat handoff ini ditulis. Seluruh
 pekerjaan Tahap B–F sudah masuk commit. Tidak ada perubahan yang belum
 tersimpan, jadi kamu mulai dari keadaan yang persis sama dengan yang dijelaskan
 di §2.
+
+---
+
+## 8. Catatan hasil eksekusi
+
+Rencana §3 dijalankan penuh di `src/components/CreateWorkspaceDialog.tsx`. Tidak
+ada file lain yang disentuh.
+
+**Satu penyimpangan dari rencana, atas permintaan user:** produk ketiga bukan
+lagi "AiNgIDE" melainkan **"AiNgExplorer"** (`id: "aingeexplorer"`), dan
+ikonnya `FolderTree` — bukan `Braces` — karena produk itu bukan lagi editor.
+Deskripsinya ikut menyesuaikan. Seluruh dokumen ini sudah disamakan dengan kode.
+
+Yang berbeda dari sketsa §3 tapi bukan perubahan lingkup:
+
+- Ditambahkan konstanta `DEFAULT_PRODUCT = "aingespace"` supaya nilai awal
+  `useState` dan `reset()` tidak menuliskan string yang sama dua kali.
+- Langkah 2 dipisah dengan garis `<div className="h-px bg-bm-border" />` antara
+  field repositori dan pemilih layout. Token `--color-bm-border` memang ada di
+  blok `@theme` `src/app/globals.css` baris 60, jadi utilitas `bg-bm-border` sah.
+- Tombol produk yang belum tersedia hanya memakai `disabled` **tanpa**
+  `aria-disabled`. Atribut `disabled` native sudah menyampaikan status itu ke
+  pembaca layar; `aria-disabled` di elemen yang sudah `disabled` mubazir.
+- `"Lewati"` sekarang memanggil `setShowErrors(false)` di jalur suksesnya, bukan
+  hanya di jalur gagal — tanpa itu, error dari percobaan sebelumnya ikut terbawa
+  ke langkah 3.
+
+Verifikasi yang benar-benar dijalankan:
+
+- `npm run typecheck` → **bersih** (Next + Electron).
+  Catatan: sempat gagal di `.next/dev/types/validator.ts` dengan
+  `TS1005 / TS1002 / TS1128`. Itu **artefak build yang tertulis separuh** oleh
+  dev server, bukan kode kita — hapus filenya dan Next akan membuatnya ulang.
+- `npx eslint src/components/CreateWorkspaceDialog.tsx` → **bersih**, nol
+  peringatan. Tidak ada efek baru, jadi `react-hooks/set-state-in-effect` tidak
+  tersentuh.
+- ⚠️ **Belum diuji manual di aplikasi.** Sembilan langkah uji di §5 masih perlu
+  dijalankan, dan langkah 9 (cek baris di Supabase) tetap mustahil sampai
+  **Tahap A** dijalankan — lihat §6.
+
+---
+
+## 9. Perubahan lanjutan (setelah user melihat hasilnya)
+
+Dua permintaan susulan, keduanya sudah dikerjakan. Ini **membatalkan sebagian
+§3** — bacalah bagian ini sebagai kebenaran terbaru.
+
+### 9.1 Field "Nama workspace" dihapus, nama dibuat otomatis
+
+Permintaan user: nama tidak lagi diketik. Sistem memberi `Workspace 1`,
+`Workspace 2`, … tergantung workspace yang **sudah tersimpan** — kalau sudah ada
+Workspace 1, yang baru jadi Workspace 2.
+
+Penamaan dikerjakan di **server**, bukan di dialog. Alasannya satu dan
+menentukan: hanya `POST /api/workspaces` yang bisa melihat seluruh workspace
+milik user, dan "Workspace 3" hanya benar relatif terhadap daftar itu. Kalau
+dialog yang menghitung, ia harus menarik daftarnya sendiri lebih dulu — satu
+round trip tambahan untuk jawaban yang tetap lebih mudah basi.
+
+Perubahan di `src/app/api/workspaces/route.ts`:
+
+- `name` di `createWorkspaceSchema` jadi **`.optional()`**. Tetap diterima kalau
+  dikirim, karena endpoint rename dan importer mana pun nanti membutuhkannya.
+- Fungsi baru `nextWorkspaceName(existing: string[])`. Ia mencocokkan
+  `/^Workspace (\d+)$/`, mengambil angka **tertinggi**, lalu +1. Sengaja bukan
+  "isi celah pertama": memakai ulang angka workspace yang sudah dihapus membuat
+  dua hal berbeda memakai label yang sama di ingatan user.
+- Dua query jadi satu. Dulu ada `select("sort_order").order(...).limit(1)` khusus
+  untuk urutan; sekarang satu `select("name, sort_order")` melayani nama **dan**
+  `sort_order` sekaligus. Jumlah baris per user kecil (endpoint reorder sendiri
+  membatasi di 200), jadi satu kolom ekstra lebih murah daripada satu round trip
+  ekstra. Query itu sekarang juga memeriksa `error`-nya, yang sebelumnya diabaikan.
+- Nama **tidak unik** di skema, jadi dua request yang berbarengan bisa mendarat
+  di angka yang sama. Itu tabrakan kosmetik yang bisa di-rename user — jauh lebih
+  murah daripada lock.
+
+Perubahan di `src/components/CreateWorkspaceDialog.tsx`:
+
+- State `workspaceName`, `Field` "Nama workspace", dan konstanta `inputCls`
+  (yang jadi tidak terpakai) dihapus.
+- `handleLaunch` tidak lagi mengirim `name`, dan membaca `data.name` dari respons
+  `201` untuk diteruskan ke `onCreated`. Ini bekerja karena route memang
+  mengembalikan baris utuh lewat `.select().single()`.
+- Jalur fallback lokal memakai **`Workspace lokal ${seq}`**, bukan
+  `Workspace ${seq}`. Workspace itu tidak ada di daftar yang dihitung server,
+  jadi menomorinya seperti workspace asli akan bertabrakan dengan workspace nyata
+  berikutnya.
+- `step1Valid` dihapus seluruhnya — langkah 1 tidak punya apa pun untuk
+  divalidasi lagi. `goNext` hanya memeriksa langkah 2, dan "Lewati" ikut
+  disederhanakan.
+
+### 9.2 Langkah 1 bernama "Start", bukan "Produk"
+
+- `STEPS[0].label` → **"Start"**.
+- Judul langkah 1 → **"Start"**, subjudulnya
+  *"Pilih fitur yang dijalankan. Namanya dibuat otomatis."* — kalimat kedua ada
+  supaya user tahu ke mana perginya field nama, bukan mengira ia hilang.
+- Komponen `ProductStep` → **`StartStep`**, dan header kecil "Produk" di dalam
+  langkah itu dibuang. Setelah field nama hilang, isi langkah 1 hanya daftar
+  fitur, jadi judul dialog sudah menjelaskan semuanya. `aria-label` radiogroup
+  jadi `"Fitur"`.
+
+### 9.3 Uji manual — pengganti langkah 1–4 di §5
+
+1. Buka dialog. Stepper menampilkan **Start → Repo & Layout → Agen**. Tidak ada
+   field nama. Fokus awal jatuh ke kartu AiNgeSpace.
+2. AiNgeCommit dan AiNgExplorer tetap mati dan bertuliskan "Coming Soon".
+3. "Berikut: repo & layout" langsung jalan tanpa mengisi apa pun.
+4. Buat workspace pertama → namanya **Workspace 1** di sidebar. Buat lagi →
+   **Workspace 2**. Hapus Workspace 1, buat lagi → **Workspace 3**, bukan
+   Workspace 1 (lihat alasannya di §9.1).
+
+Sisanya (langkah 5–9 di §5) tidak berubah.

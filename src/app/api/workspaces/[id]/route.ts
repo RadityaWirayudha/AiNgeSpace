@@ -8,8 +8,7 @@ import { z } from "zod"
 const updateWorkspaceSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
-    github_branch: z.string().trim().min(1).max(255).optional(),
-    local_path: z.string().nullable().optional(),
+    working_dir: z.string().trim().min(1).max(4096).optional(),
     layout_preset: z.enum(LAYOUT_PRESET_IDS).optional(),
     agent_ids: z.array(z.string().min(1).max(64)).max(32).optional(),
   })

@@ -5,13 +5,15 @@ import { DEFAULT_LAYOUT_PRESET, LAYOUT_PRESET_IDS } from "@/lib/workspace/layout
 import { z } from "zod"
 
 const createWorkspaceSchema = z.object({
-  name: z.string().trim().min(1).max(255),
-  githubRepo: z
-    .string()
-    .trim()
-    .regex(/^[\w.-]+\/[\w.-]+$/, "Gunakan format pengguna/nama-repo"),
-  githubBranch: z.string().trim().min(1).max(255).default("main"),
-  localPath: z.string().optional(),
+  // Optional: the create dialog stopped asking for a name, so the server names
+  // the workspace from what the caller already owns. Still accepted, because a
+  // rename endpoint and any future importer need to set it explicitly.
+  name: z.string().trim().min(1).max(255).optional(),
+  // No path-shape validation on purpose: what counts as a valid path differs
+  // per OS, and the only check that actually matters — does this folder exist
+  // on the machine running the shell — belongs to the Electron main process
+  // (isDirectory() in pty-manager.ts).
+  workingDir: z.string().trim().min(1).max(4096),
   // The dialog has always collected these two; until now the POST body dropped
   // them, so the layout survived only in localStorage and the agent selection
   // was discarded outright.
@@ -44,6 +46,27 @@ export async function GET() {
   }
 }
 
+const AUTO_NAME_RE = /^Workspace (\d+)$/
+
+/**
+ * "Workspace 1", "Workspace 2", … Counts from the highest number already in use
+ * rather than filling the first gap: reusing the number of a deleted workspace
+ * would give two different things the same label in the user's memory.
+ *
+ * Names are not unique in the schema, so two requests racing here can both land
+ * on the same number. That is a cosmetic collision the user can rename away —
+ * worth far less than the round trip a lock would cost.
+ */
+function nextWorkspaceName(existing: string[]): string {
+  const highest = existing.reduce((max, name) => {
+    const match = AUTO_NAME_RE.exec(name)
+    if (!match) return max
+    const n = Number(match[1])
+    return Number.isSafeInteger(n) && n > max ? n : max
+  }, 0)
+  return `Workspace ${highest + 1}`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const userId = await getAuthUserId()
@@ -52,28 +75,29 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient()
 
-    // New workspaces land at the end of the user's list. Read-then-write is
-    // safe enough here: a collision only means two rows share a sort_order, and
-    // the created_at tiebreaker keeps the order stable either way.
-    const { data: last } = await supabase
+    // One read serves both the auto-name and the sort_order. New workspaces land
+    // at the end of the user's list; read-then-write is safe enough, because a
+    // collision only means two rows share a sort_order and the created_at
+    // tiebreaker keeps the order stable either way.
+    const { data: existing, error: existingError } = await supabase
       .from("workspaces_aingespace")
-      .select("sort_order")
+      .select("name, sort_order")
       .eq("clerk_user_id", userId)
-      .order("sort_order", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    const owned = existing ?? []
+    const lastOrder = owned.reduce((max, row) => Math.max(max, row.sort_order), -1)
 
     const { data, error } = await supabase
       .from("workspaces_aingespace")
       .insert({
         clerk_user_id: userId,
-        name: parsed.name,
-        github_repo: parsed.githubRepo,
-        github_branch: parsed.githubBranch,
-        local_path: parsed.localPath ?? null,
+        name: parsed.name ?? nextWorkspaceName(owned.map((row) => row.name)),
+        working_dir: parsed.workingDir,
         layout_preset: parsed.layoutPreset,
         agent_ids: parsed.agentIds,
-        sort_order: (last?.sort_order ?? -1) + 1,
+        sort_order: lastOrder + 1,
       })
       .select()
       .single()

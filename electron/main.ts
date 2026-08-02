@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron"
 import { release } from "node:os"
 import { join, resolve } from "node:path"
 import { CH } from "./channels"

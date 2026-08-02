@@ -14,9 +14,7 @@ export interface Database {
           id: string
           clerk_user_id: string
           name: string
-          github_repo: string
-          github_branch: string
-          local_path: string | null
+          working_dir: string
           layout_preset: string
           agent_ids: string[]
           sort_order: number
@@ -27,9 +25,7 @@ export interface Database {
           id?: string
           clerk_user_id: string
           name: string
-          github_repo: string
-          github_branch?: string
-          local_path?: string | null
+          working_dir: string
           layout_preset?: string
           agent_ids?: string[]
           sort_order?: number
@@ -40,9 +36,7 @@ export interface Database {
           id?: string
           clerk_user_id?: string
           name?: string
-          github_repo?: string
-          github_branch?: string
-          local_path?: string | null
+          working_dir?: string
           layout_preset?: string
           agent_ids?: string[]
           sort_order?: number
