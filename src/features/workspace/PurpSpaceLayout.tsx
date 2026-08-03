@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { Plus, LayoutGrid, AlertTriangle, X } from "lucide-react"
-import { BridgeMindSidebar } from "@/components/BridgeMindSidebar"
+import { PurpSpaceSidebar } from "@/components/PurpSpaceSidebar"
 import { Pane } from "@/components/Pane"
 import {
   CreateWorkspaceDialog,
@@ -119,7 +119,7 @@ function LoadingState() {
   )
 }
 
-function BridgeMindInner() {
+function PurpSpaceInner() {
   const [workspaces, setWorkspaces] = useState<WorkspaceData[]>([])
   const [loading, setLoading] = useState(true)
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("")
@@ -583,7 +583,7 @@ function BridgeMindInner() {
 
   return (
     <div className="flex h-screen bg-bm-bg overflow-hidden">
-      <BridgeMindSidebar
+      <PurpSpaceSidebar
         workspaces={sidebarWorkspaces}
         activeWorkspaceId={activeWorkspaceId}
         activePaneId={activePaneId}
@@ -718,14 +718,14 @@ function BridgeMindInner() {
   )
 }
 
-export function BridgeMindLayout() {
+export function PurpSpaceLayout() {
   return (
     <PaneTerminalProvider>
       {/* Hotkeys sit inside both providers because they act on the terminal
           tree and also have to open the shortcuts dialog. */}
       <ShortcutsDialogProvider>
         <TerminalHotkeys />
-        <BridgeMindInner />
+        <PurpSpaceInner />
       </ShortcutsDialogProvider>
     </PaneTerminalProvider>
   )

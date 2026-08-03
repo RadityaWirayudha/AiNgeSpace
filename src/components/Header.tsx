@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { GitBranch, Wifi, Terminal, LogOut, ChevronDown, Settings } from "lucide-react"
+import { GitBranch, Wifi, LogOut, ChevronDown, Settings } from "lucide-react"
+import { PurpSpaceMark } from "@/components/brand/PurpSpaceMark"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +18,10 @@ export function Header({ workspaceName }: { workspaceName?: string }) {
       <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="size-6 rounded-lg bg-gradient-to-br from-purple/15 to-violet/10 border border-purple/10 flex items-center justify-center group-hover:border-purple/20 transition-colors">
-            <Terminal className="size-3 text-purple" />
+            <PurpSpaceMark className="size-4" />
           </div>
           <span className="text-sm font-bold tracking-tight text-foreground">
-            AiNgeSpace
+            PurpSpace
           </span>
         </Link>
         {workspaceName && (

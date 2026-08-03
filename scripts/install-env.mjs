@@ -2,7 +2,7 @@
  * Copies the repo `.env.local` into the packaged app's config directory.
  *
  * The installer intentionally ships no secrets, so a freshly installed
- * BridgeMind has no Supabase/Clerk credentials until this runs once.
+ * PurpSpace has no Supabase/Clerk credentials until this runs once.
  */
 import { copyFile, mkdir, access } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
@@ -14,12 +14,12 @@ const source = join(root, ".env.local")
 
 function userDataDir() {
   if (process.platform === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "BridgeMind")
+    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "PurpSpace")
   }
   if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support", "BridgeMind")
+    return join(homedir(), "Library", "Application Support", "PurpSpace")
   }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "BridgeMind")
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "PurpSpace")
 }
 
 try {

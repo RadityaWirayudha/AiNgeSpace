@@ -26,6 +26,7 @@ import {
   Package,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PurpSpaceMark } from "@/components/brand/PurpSpaceMark"
 
 interface MenuItem {
   label: string
@@ -135,7 +136,7 @@ export function MenuBar({ onToggleExplorer, explorerOpen }: MenuBarProps) {
         { label: "Documentation", icon: HelpCircle },
         { separator: true, label: "" },
         { label: "Release Notes", icon: FileCode },
-        { label: "About AiNgeSpace", icon: Terminal },
+        { label: "About PurpSpace", icon: Terminal },
       ],
     },
   ]
@@ -146,9 +147,10 @@ export function MenuBar({ onToggleExplorer, explorerOpen }: MenuBarProps) {
       className="flex items-center h-7 px-1 bg-[#0c0c0f] border-b border-white/[0.06] shrink-0 select-none"
     >
       <Link href="/" className="flex items-center gap-0.5 mr-2 group">
-        <div className="size-4 rounded bg-gradient-to-br from-purple to-violet flex items-center justify-center group-hover:shadow-lg group-hover:shadow-purple/20 transition-shadow">
-          <Terminal className="size-2.5 text-white" />
-        </div>
+        <PurpSpaceMark
+          className="size-4 transition-opacity group-hover:opacity-80"
+          title="PurpSpace"
+        />
       </Link>
 
       {menus.map((menu) => (

@@ -6,7 +6,7 @@ import { isUuid } from "@/lib/uuid"
 import type { Database } from "@/types/database"
 import { z } from "zod"
 
-type PaneUpdate = Database["public"]["Tables"]["panes_aingespace"]["Update"]
+type PaneUpdate = Database["public"]["Tables"]["panes_purpspace"]["Update"]
 
 const updatePaneSchema = z
   .object({
@@ -35,10 +35,10 @@ async function ownedPane(
   if (!isUuid(paneId)) return null
 
   const { data } = await supabase
-    .from("panes_aingespace")
-    .select("id, workspaces_aingespace!inner(clerk_user_id)")
+    .from("panes_purpspace")
+    .select("id, workspaces_purpspace!inner(clerk_user_id)")
     .eq("id", paneId)
-    .eq("workspaces_aingespace.clerk_user_id", userId)
+    .eq("workspaces_purpspace.clerk_user_id", userId)
     .maybeSingle()
 
   return data
@@ -70,7 +70,7 @@ export async function PATCH(
     if (parsed.nameSeq !== undefined) patch.name_seq = parsed.nameSeq
 
     const { data, error } = await supabase
-      .from("panes_aingespace")
+      .from("panes_purpspace")
       .update(patch)
       .eq("id", id)
       .select()
@@ -103,7 +103,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Pane not found" }, { status: 404 })
     }
 
-    const { error } = await supabase.from("panes_aingespace").delete().eq("id", id)
+    const { error } = await supabase.from("panes_purpspace").delete().eq("id", id)
 
     if (error) throw error
 

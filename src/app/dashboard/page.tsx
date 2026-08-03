@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Terminal,
   Folder,
   FolderOpen,
   Clock,
@@ -14,6 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PurpSpaceMark } from "@/components/brand/PurpSpaceMark"
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog"
 import {
   fetchWorkspaces,
@@ -142,9 +142,9 @@ export default function DashboardPage() {
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="size-8 rounded-lg bg-gradient-to-br from-purple/15 to-violet/10 border border-purple/15 flex items-center justify-center">
-              <Terminal className="size-3.5 text-purple" />
+              <PurpSpaceMark className="size-5" />
             </div>
-            <span className="text-sm font-bold tracking-tight">AiNgeSpace</span>
+            <span className="text-sm font-bold tracking-tight">PurpSpace</span>
           </Link>
           <div className="w-px h-4 bg-white/[0.06]" />
           <span className="text-xs text-zinc-500">Dashboard</span>

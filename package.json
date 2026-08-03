@@ -1,9 +1,9 @@
 {
-  "name": "aingespace",
+  "name": "purpspace",
   "version": "0.1.0",
   "private": true,
   "description": "Multi-pane AI agent workspace, terminal-native.",
-  "author": "BridgeMind",
+  "author": "PurpSpace",
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "next dev",

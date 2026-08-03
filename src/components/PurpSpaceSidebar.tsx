@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PurpSpaceMark } from "@/components/brand/PurpSpaceMark"
 import {
   Tooltip,
   TooltipContent,
@@ -50,7 +51,7 @@ interface WorkspaceItem {
   panes?: SidebarPane[]
 }
 
-interface BridgeMindSidebarProps {
+interface PurpSpaceSidebarProps {
   workspaces: WorkspaceItem[]
   activeWorkspaceId: string
   activePaneId?: string | null
@@ -84,8 +85,13 @@ const MIN_WIDTH = 184
 const MAX_WIDTH = 380
 const DEFAULT_WIDTH = 232
 const RAIL_WIDTH = 48
-const WIDTH_KEY = "aingespace:sidebar-width"
-const RAIL_KEY = "aingespace:sidebar-rail"
+const WIDTH_KEY = "purpspace:sidebar-width"
+const RAIL_KEY = "purpspace:sidebar-rail"
+/** Pre-rebrand keys. Read once so the sidebar someone already sized does not
+ *  snap back to the default the first time they open the renamed build; never
+ *  written, so they age out on their own. */
+const LEGACY_WIDTH_KEY = "aingespace:sidebar-width"
+const LEGACY_RAIL_KEY = "aingespace:sidebar-rail"
 /** Tooltips are everywhere in here; the app-wide provider fires them with no
  *  delay, which turns a mouse crossing the sidebar into a strobe. Base UI's
  *  delay lives on the provider, so the sidebar nests its own. */
@@ -115,13 +121,17 @@ function readPrefs(): SidebarPrefs {
   if (cachedPrefs) return cachedPrefs
   let prefs = DEFAULT_PREFS
   try {
-    const storedWidth = Number(localStorage.getItem(WIDTH_KEY))
+    const rawWidth =
+      localStorage.getItem(WIDTH_KEY) ?? localStorage.getItem(LEGACY_WIDTH_KEY)
+    const rawRail =
+      localStorage.getItem(RAIL_KEY) ?? localStorage.getItem(LEGACY_RAIL_KEY)
+    const storedWidth = Number(rawWidth)
     prefs = {
       width:
         Number.isFinite(storedWidth) && storedWidth > 0
           ? clampWidth(storedWidth)
           : DEFAULT_WIDTH,
-      railed: localStorage.getItem(RAIL_KEY) === "1",
+      railed: rawRail === "1",
     }
   } catch {
     // Private mode or a blocked store — the defaults are perfectly usable.
@@ -1153,8 +1163,7 @@ function Rail({
                 aria-label="Expand sidebar"
                 onClick={onExpand}
                 className={cn(
-                  "relative size-[22px] rounded-[3px] shrink-0",
-                  "bg-gradient-to-br from-purple to-violet",
+                  "relative size-[22px] shrink-0",
                   "flex items-center justify-center",
                   // The brand tile is the rail's expand affordance, but nothing
                   // about a static logo says "clickable" — so it dims on press
@@ -1164,9 +1173,7 @@ function Rail({
               />
             }
           >
-            <span className="text-[9px] font-bold text-white leading-none">
-              BM
-            </span>
+            <PurpSpaceMark className="size-[20px]" />
           </TooltipTrigger>
           <TooltipContent side="right" className="text-[10px] font-mono">
             <span>Expand sidebar</span>
@@ -1379,7 +1386,7 @@ function ShortcutSheet({
    SIDEBAR
 -------------------------------------------------------------------*/
 
-export function BridgeMindSidebar({
+export function PurpSpaceSidebar({
   workspaces,
   activeWorkspaceId,
   activePaneId,
@@ -1393,7 +1400,7 @@ export function BridgeMindSidebar({
   onOpenEnvVars,
   onReorderWorkspaces,
   className,
-}: BridgeMindSidebarProps) {
+}: PurpSpaceSidebarProps) {
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [resizing, setResizing] = useState(false)
@@ -1933,13 +1940,9 @@ export function BridgeMindSidebar({
             {/* Every band in this panel starts on the same 8px gutter as a tree
                 row, so the left edge reads as one column rather than four. */}
             <div className="flex items-center gap-2 pl-2 pr-1 h-10 border-b border-bm-border shrink-0">
-              <div className="size-[18px] rounded-[3px] bg-gradient-to-br from-purple to-violet flex items-center justify-center shrink-0">
-                <span className="text-[8px] font-bold text-white leading-none">
-                  BM
-                </span>
-              </div>
+              <PurpSpaceMark className="size-[18px]" />
               <span className="flex-1 min-w-0 truncate text-[11px] font-semibold text-bm-text tracking-[0.01em]">
-                BridgeMind
+                PurpSpace
                 <span className="ml-1 text-[9px] font-normal text-bm-text-dim tracking-normal">
                   v1.0
                 </span>

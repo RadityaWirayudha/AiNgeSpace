@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const DEV_PORT = process.env.BM_DEV_PORT ?? "3000"
-const DEV_URL = process.env.BM_DEV_URL ?? `http://localhost:${DEV_PORT}`
+const DEV_PORT = process.env.PS_DEV_PORT ?? "3000"
+const DEV_URL = process.env.PS_DEV_URL ?? `http://localhost:${DEV_PORT}`
 const npx = process.platform === "win32" ? "npx.cmd" : "npx"
 
 const children = []
@@ -93,11 +93,11 @@ tsc.on("exit", async (code) => {
     shell: process.platform === "win32",
     // ELECTRON_ENABLE_LOGGING is not optional on Windows: electron.exe is built
     // for the GUI subsystem, so without it every `console.log` from the main
-    // process is discarded. That silently hides the `[bridgemind] deep link: …`
+    // process is discarded. That silently hides the `[purpspace] deep link: …`
     // line, which is the first thing to check when desktop sign-in misbehaves —
     // its absence reads as "the deep link never arrived" when in fact only the
     // logging was missing.
-    env: { ...process.env, BM_DEV_URL: DEV_URL, ELECTRON_ENABLE_LOGGING: "1" },
+    env: { ...process.env, PS_DEV_URL: DEV_URL, ELECTRON_ENABLE_LOGGING: "1" },
   })
   children.push(electron)
   electron.on("exit", (c) => shutdown(c ?? 0))

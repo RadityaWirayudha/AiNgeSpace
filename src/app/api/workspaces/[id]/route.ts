@@ -37,7 +37,7 @@ export async function GET(
     // somebody else) is a 404, and `single()` turned that into a thrown error
     // that the catch below reported as a 500.
     const { data, error } = await supabase
-      .from("workspaces_aingespace")
+      .from("workspaces_purpspace")
       .select("*")
       .eq("id", id)
       .eq("clerk_user_id", userId)
@@ -73,7 +73,7 @@ export async function PATCH(
     const supabase = createServerClient()
 
     const { data, error } = await supabase
-      .from("workspaces_aingespace")
+      .from("workspaces_purpspace")
       .update(parsed)
       .eq("id", id)
       .eq("clerk_user_id", userId)
@@ -111,7 +111,7 @@ export async function DELETE(
 
     // Panes and env vars go with the workspace via ON DELETE CASCADE.
     const { error } = await supabase
-      .from("workspaces_aingespace")
+      .from("workspaces_purpspace")
       .delete()
       .eq("id", id)
       .eq("clerk_user_id", userId)

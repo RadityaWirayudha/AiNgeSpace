@@ -12,7 +12,7 @@ export async function GET() {
     // and `single()` treated it as an error that surfaced as a 500 instead of
     // the `connected: false` the caller expects.
     const { data: connection } = await supabase
-      .from("github_connections_aingespace")
+      .from("github_connections_purpspace")
       .select("github_username, access_token_encrypted")
       .eq("clerk_user_id", userId)
       .maybeSingle()

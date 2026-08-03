@@ -9,31 +9,31 @@ import { startNextServer, type NextServerHandle } from "./next-server"
 import type { TerminalCreateOptions } from "../src/types/desktop"
 
 // Must run before any getPath("userData") call so dev and packaged builds agree
-// on %APPDATA%\BridgeMind instead of splitting into two config directories.
-app.setName("BridgeMind")
+// on %APPDATA%\PurpSpace instead of splitting into two config directories.
+app.setName("PurpSpace")
 
-const PROTOCOL = "aingespace"
+const PROTOCOL = "purpspace"
 const APP_BG = "#0e0e10" // --bg-app, referensi.md §2
 
 /** Repo root when running from source; irrelevant once packaged.
  *  __dirname is <root>/dist-electron/electron, hence two levels up. */
 const projectRoot = resolve(__dirname, "..", "..")
 const isDev = !app.isPackaged
-const devUrl = process.env.BM_DEV_URL ?? "http://localhost:3000"
+const devUrl = process.env.PS_DEV_URL ?? "http://localhost:3000"
 
 let mainWindow: BrowserWindow | null = null
 let nextServer: NextServerHandle | null = null
 let ptyManager: PtyManager | null = null
 
-process.env.BM_APP_VERSION = app.getVersion()
+process.env.PS_APP_VERSION = app.getVersion()
 // `os.release()` is "10.0.19045" on Windows; xterm wants the third field. Read
 // here rather than in the preload, which is sandboxed and cannot require `os`.
-process.env.BM_OS_BUILD =
+process.env.PS_OS_BUILD =
   process.platform === "win32" ? (release().split(".")[2] ?? "0") : "0"
 
 function log(...parts: unknown[]) {
   // Stays on stdout: visible in `npm run dev:desktop`, harmless when packaged.
-  console.log("[bridgemind]", ...parts)
+  console.log("[purpspace]", ...parts)
 }
 
 function standaloneDir(): string {
@@ -53,7 +53,7 @@ function createWindow(): BrowserWindow {
     backgroundColor: APP_BG,
     show: false,
     autoHideMenuBar: true,
-    title: "BridgeMind",
+    title: "PurpSpace",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -171,7 +171,7 @@ async function boot() {
   // Read by the preload to seed the workspace dialog's working folder. Set
   // before the window exists, because the renderer process inherits this
   // environment when it is spawned and never sees later changes.
-  process.env.BM_HOME_DIR = home
+  process.env.PS_HOME_DIR = home
   // Typing in a pane should land somewhere useful: the repo in dev, home in prod.
   const fallbackCwd = isDev ? projectRoot : home
 
@@ -208,7 +208,7 @@ async function boot() {
       "data:text/html;charset=utf-8," +
         encodeURIComponent(
           `<body style="margin:0;background:${APP_BG};color:#d4d4d8;font:13px ui-monospace,monospace;padding:32px">
-           <p style="color:#a855f7">BridgeMind could not start its local server.</p>
+           <p style="color:#a855f7">PurpSpace could not start its local server.</p>
            <pre style="white-space:pre-wrap;color:#8a8a92">${message.replace(/[<&]/g, "")}</pre>
            </body>`
         )

@@ -91,29 +91,29 @@ const RECENT_LIMIT = 6
  */
 const PRODUCTS = [
   {
-    id: "aingespace",
-    name: "AiNgeSpace",
+    id: "purpspace",
+    name: "PurpSpace",
     icon: Terminal,
     desc: "Terminal paralel dengan agen di tiap panel.",
     available: true,
   },
   {
-    id: "aingecommit",
-    name: "AiNgeCommit",
+    id: "purpcommit",
+    name: "PurpCommit",
     icon: GitBranch,
     desc: "Alur commit dan review yang dibantu agen.",
     available: false,
   },
   {
-    id: "aingeexplorer",
-    name: "AiNgExplorer",
+    id: "purpexplorer",
+    name: "PurpExplorer",
     icon: FolderTree,
     desc: "Menjelajah berkas dan struktur proyek dari satu panel.",
     available: false,
   },
 ] as const
 
-const DEFAULT_PRODUCT = "aingespace"
+const DEFAULT_PRODUCT = "purpspace"
 
 // The presets themselves live in src/lib/workspace/layouts.ts, because the
 // database CHECK constraint and both workspace route handlers need the same
@@ -877,12 +877,12 @@ let localWorkspaceSeq = 0
  *  there is nothing to subscribe to — but reading `window` during render still
  *  has to go through a store to stay hydration-safe. */
 const NEVER_CHANGES = () => () => {}
-const readDesktop = () => !!window.bridgemind
+const readDesktop = () => !!window.purpspace
 const NOT_DESKTOP = () => false
 /** Same store, for the same reason. The bridge reads this off an env var the
  *  main process sets before the window exists, so it is available on the very
  *  first render — no effect, and therefore no empty field flashing past. */
-const readHomeDir = () => window.bridgemind?.homeDir ?? ""
+const readHomeDir = () => window.purpspace?.homeDir ?? ""
 const NO_HOME = () => ""
 
 /** Long enough that holding a key down does not fire a probe per character,
@@ -1066,7 +1066,7 @@ export function CreateWorkspaceDialog({
   }, [dirCommand, resolvedWorkingDir])
 
   const browseForFolder = useCallback(() => {
-    const bridge = window.bridgemind
+    const bridge = window.purpspace
     if (!bridge) return
     void bridge.chooseDirectory(workingDir).then((picked) => {
       if (!picked) return
@@ -1097,7 +1097,7 @@ export function CreateWorkspaceDialog({
 
     let cancelled = false
     const timer = setTimeout(() => {
-      const bridge = window.bridgemind
+      const bridge = window.purpspace
       if (!bridge) return
       void bridge.probeDirectory(target).then((result) => {
         if (cancelled) return
@@ -1195,7 +1195,7 @@ export function CreateWorkspaceDialog({
     const target = resolvedWorkingDir
     if (!target) return false
 
-    const bridge = window.bridgemind
+    const bridge = window.purpspace
     // Web build. There is no filesystem here to be right or wrong about, and
     // refusing a path this side cannot see would block creation outright.
     if (!bridge) return true

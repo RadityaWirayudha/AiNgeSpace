@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AiNgeSpace — AI Coding Terminal",
+  title: "PurpSpace — AI Coding Terminal",
   description: "Browser-first AI Coding Terminal for developers",
   icons: {
     icon: "/favicon.svg",

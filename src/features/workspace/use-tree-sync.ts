@@ -22,7 +22,7 @@ interface Options {
 }
 
 /**
- * Writes `panes_aingespace.tree` whenever a pane's tree changes.
+ * Writes `panes_purpspace.tree` whenever a pane's tree changes.
  *
  * Trees are immutable in the reducer — every split, close and resize produces a
  * whole new object — so identity comparison against the last value written is

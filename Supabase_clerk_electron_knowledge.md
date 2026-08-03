@@ -208,19 +208,19 @@ Karena siapa pun dapat melakukan reverse engineering terhadap aplikasi yang tela
 Ketika aplikasi di-build menjadi:
 
 ```
-AiNgeSpace.exe
+PurpSpace.exe
 ```
 
 atau
 
 ```
-AiNgeSpace.dmg
+PurpSpace.dmg
 ```
 
 atau
 
 ```
-AiNgeSpace.AppImage
+PurpSpace.AppImage
 ```
 
 maka kemungkinan besar pengguna dapat melihat:

@@ -1,8 +1,8 @@
-# BridgeMind UI Design Reference
+# PurpSpace UI Design Reference
 
 > **Purpose**
 >
-> Dokumen ini berisi guideline visual yang diturunkan dari screenshot antarmuka **BridgeMind** (multi-pane agent dashboard).
+> Dokumen ini berisi guideline visual yang diturunkan dari screenshot antarmuka **PurpSpace** (multi-pane agent dashboard).
 >
 > Gunakan dokumen ini sebagai **single source of truth** untuk menjaga konsistensi desain ketika membuat komponen maupun halaman baru.
 
@@ -17,8 +17,8 @@
 │ WORKSPACES 4 │ ○ Review project and…  ×  │▓ Launch …          5% ▓ ×▓│
 │              │ ─────────────────────────  │▓ ───────────────────────▓│
 │ Swarm 2      │ Two things worth flagging: │▓ The BOM overlay is up   ▓│
-│ BridgeMind 8 │ 1. bridgemind_admin no...  │▓ and running. Here's...  ▓│
-│▐BridgeMind 7▌│ 2. bridgeagent_memory...   │▓ • Server: bomb-sprint...▓│
+│ PurpSpace 8 │ 1. purpspace_admin no...  │▓ and running. Here's...  ▓│
+│▐PurpSpace 7▌│ 2. purpagent_memory...   │▓ • Server: bomb-sprint...▓│
 │ GPT 5.5   6  │                            │▓ • Control panel: open...▓│
 │              │ What would you like to...  │▓ Cooked for 12m 1s       ▓│
 │              │ ─────────────────────────  │▓ ───────────────────────▓│
@@ -47,7 +47,7 @@
 
 ## Core Concept
 
-BridgeMind bukan dashboard SaaS biasa.
+PurpSpace bukan dashboard SaaS biasa.
 
 Desainnya harus terasa seperti:
 
@@ -338,7 +338,7 @@ WORKSPACES 4
 ## Item
 
 ```
-BridgeMind      7
+PurpSpace      7
 GPT 5.5         6
 Swarm           2
 ```
@@ -447,6 +447,6 @@ Tidak boleh ada pane tanpa status.
 
 > **Summary**
 >
-> BridgeMind mengutamakan **information density**, **terminal-native aesthetics**, dan **multi-agent monitoring**.
+> PurpSpace mengutamakan **information density**, **terminal-native aesthetics**, dan **multi-agent monitoring**.
 >
 > Seluruh keputusan visual harus mendukung tujuan tersebut, bukan mengikuti gaya dashboard SaaS modern yang penuh whitespace dan dekorasi.

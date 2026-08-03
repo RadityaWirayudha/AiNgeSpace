@@ -1,7 +1,7 @@
 "use client"
 
-import { BridgeMindLayout } from "@/features/workspace/BridgeMindLayout"
+import { PurpSpaceLayout } from "@/features/workspace/PurpSpaceLayout"
 
-export default function BridgeMindPage() {
-  return <BridgeMindLayout />
+export default function PurpSpacePage() {
+  return <PurpSpaceLayout />
 }

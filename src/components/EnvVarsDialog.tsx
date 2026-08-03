@@ -24,7 +24,7 @@ import {
   type EnvVarRow,
 } from "@/features/workspace/workspace-api"
 
-/** Mirrors env_vars_aingespace_key_format and the route's own zod check, so a
+/** Mirrors env_vars_purpspace_key_format and the route's own zod check, so a
  *  bad key is refused before it costs a round trip. */
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]{0,254}$/
 

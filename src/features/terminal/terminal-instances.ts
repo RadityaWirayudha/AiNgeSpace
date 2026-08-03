@@ -189,7 +189,7 @@ function fitInstance(inst: Instance) {
 -------------------------------------------------------------------*/
 
 function desktopBridge(): DesktopBridge | undefined {
-  return typeof window !== "undefined" ? window.bridgemind : undefined
+  return typeof window !== "undefined" ? window.purpspace : undefined
 }
 
 function stagingNode(): HTMLDivElement {
@@ -266,7 +266,7 @@ function loadWebgl(inst: Instance) {
 function writeBanner(term: Terminal, terminalId: string, live: boolean) {
   for (const line of BANNER) term.writeln(line)
   term.writeln("")
-  term.writeln("  \x1b[38;2;168;85;247mAiNgeSpace Terminal\x1b[0m")
+  term.writeln("  \x1b[38;2;168;85;247mPurpSpace Terminal\x1b[0m")
   term.writeln(
     live
       ? `  ${DIM}session ${terminalId} · attaching to your shell…${RESET}`

@@ -40,7 +40,7 @@ Fitur "Buat Workspace" yang diminta user **sudah selesai seluruhnya di lapisan U
 
 - **"jangan terlalu boros atau apapun itu, aku mau database bener-bener terpakai, bukan hanya pajangan doang."**
   → Setiap kolom yang ditambah harus ada yang membaca. **Ini alasan §4 penting** — dan alasan kenapa §4 harus disebut terang-terangan ke user, bukan disembunyikan.
-- Penamaan tabel: `<entity>_aingespace`. Migrasi pakai `if exists`.
+- Penamaan tabel: `<entity>_purpspace`. Migrasi pakai `if exists`.
 - **Jangan commit atau push kecuali user memintanya.**
 
 ---
@@ -51,7 +51,7 @@ Fitur "Buat Workspace" yang diminta user **sudah selesai seluruhnya di lapisan U
 
 | Berkas | Isi |
 |---|---|
-| `supabase/migrations/002_rewrite_aingespace_schema.sql` | `working_dir text not null` + CHECK `workspaces_aingespace_working_dir_not_blank`. `github_repo`/`branch` hilang. **Belum dijalankan — lihat §5.1.** |
+| `supabase/migrations/002_rewrite_aingespace_schema.sql` | `working_dir text not null` + CHECK `workspaces_purpspace_working_dir_not_blank`. `github_repo`/`branch` hilang. **Belum dijalankan — lihat §5.1.** |
 | `src/types/database.ts` | Row/Insert/Update sudah `working_dir`. |
 | `src/app/api/workspaces/route.ts` | zod `workingDir: z.string().trim().min(1).max(4096)`; nama workspace dihitung **server** (`nextWorkspaceName()`, tertinggi+1). |
 | `src/app/api/workspaces/[id]/route.ts` | `working_dir` optional di PATCH; `isUuid()` guard tetap ada. |
@@ -116,7 +116,7 @@ Nomor baris per akhir sesi ini:
 
 ### 2.5 Konsumen hilir
 
-- `src/features/workspace/BridgeMindLayout.tsx:332` — judul pane pakai `folderName(draft.workingDir)` → `"api · pane 1"`.
+- `src/features/workspace/PurpSpaceLayout.tsx:332` — judul pane pakai `folderName(draft.workingDir)` → `"api · pane 1"`.
 - `src/app/dashboard/page.tsx` — kartu statistik **"Working folders"** = jumlah **folder unik** (`new Set(...)`), bukan jumlah workspace. Baris repo+branch diganti satu `compactPath(ws.working_dir)` dengan `title` path penuh.
 - `src/types/index.ts` — `interface Workspace` (yang punya `githubRepo`/`githubBranch`) **dihapus** setelah dipastikan lewat grep tidak ada yang meng-import. `GitHubRepo` **sengaja dibiarkan** — fitur koneksi GitHub masih hidup.
 
@@ -161,8 +161,8 @@ Kalau probe balik `ok` tapi `result.path !== target` (mis. `~/projects`, atau `C
 
 1. **`npm run typecheck` gagal karena artefak Next dev server.** `.next/dev/types/validator.ts` kadang terpotong dan melempar `TS1005`/`TS1002`/`TS1128`. **Hapus dulu**, baru jalankan. Bukan bug di kode.
 2. **ESLint global bukan gate.** `react-hooks/set-state-in-effect` adalah *error* di repo ini dengan ±320 pelanggaran lama. Lint **hanya berkas yang kamu sentuh**.
-3. **Ada 1 error ESLint pre-existing di `BridgeMindLayout.tsx:296`** (`react-hooks/set-state-in-effect`). Sudah dibuktikan pre-existing lewat `git stash` → `npx eslint` → error yang sama di tree bersih → `git stash pop`. **Jangan "perbaiki" ini** sebagai bagian dari pekerjaan working folder.
-4. **`electron/channels.ts` adalah `const enum` dengan sengaja.** tsc meng-inline-nya dan menghapus import-nya, karena `require("./channels")` relatif akan melempar di preload ber-sandbox dan membuat `window.bridgemind` diam-diam `undefined`. **Biarkan `isolatedModules` tetap OFF di `tsconfig.electron.json`.**
+3. **Ada 1 error ESLint pre-existing di `PurpSpaceLayout.tsx:296`** (`react-hooks/set-state-in-effect`). Sudah dibuktikan pre-existing lewat `git stash` → `npx eslint` → error yang sama di tree bersih → `git stash pop`. **Jangan "perbaiki" ini** sebagai bagian dari pekerjaan working folder.
+4. **`electron/channels.ts` adalah `const enum` dengan sengaja.** tsc meng-inline-nya dan menghapus import-nya, karena `require("./channels")` relatif akan melempar di preload ber-sandbox dan membuat `window.purpspace` diam-diam `undefined`. **Biarkan `isolatedModules` tetap OFF di `tsconfig.electron.json`.**
 5. **RLS aktif dengan nol policy — disengaja** (deny-all untuk anon/authenticated, service_role menembus). Otorisasi di route handler lewat `.eq("clerk_user_id", userId)`. Kalau query dari browser mengembalikan array kosong, **jangan matikan RLS** — pindahkan query-nya ke route handler.
 6. **Supabase hanya diakses server-side** lewat `SUPABASE_SERVICE_ROLE_KEY`. `src/lib/supabase/client.ts` (klien anon-key) sudah dihapus dan **tidak boleh dibuat lagi**.
 7. **`POST /api/panes` harus `.insert()`, jangan `.upsert()`** — id baris datang dari klien; upsert membuka jalan menimpa baris pane milik orang lain dengan menebak id-nya.
@@ -196,9 +196,9 @@ Kalau probe balik `ok` tapi `result.path !== target` (mis. `~/projects`, atau `C
 2. `ensureInstance` (`terminal-instances.ts:536`) **tidak punya pemanggil sama sekali**.
 3. `createInstance` (`terminal-instances.ts:448`) adalah tempat `attachPty` dipanggil — di titik inilah `cwd` harus sudah diketahui, karena PTY dibuat sekali di sini dan **tidak** dibuat ulang saat re-attach.
 4. **⚠️ Jangan pakai variabel global "cwd saat ini" di level modul.** Effect mount komponen anak berjalan **sebelum** effect induknya, jadi global itu akan terbaca kosong pada terminal pertama. `cwd` harus dialirkan sebagai **prop eksplisit** turun ke `TerminalPanel`.
-5. **`WorkspaceData` di `BridgeMindLayout.tsx:52–61` belum punya field `workingDir`.** Yang tersedia hanya `draft.workingDir` di `handleWorkspaceCreated` (baris 332) — itu jalur *workspace baru dibuat*. Untuk workspace yang **dibuka kembali**, `working_dir` harus dibaca dari baris database (`fetchWorkspaces()` sudah mengembalikannya sebagai `WorkspaceRow.working_dir`) dan disimpan ke `WorkspaceData`.
+5. **`WorkspaceData` di `PurpSpaceLayout.tsx:52–61` belum punya field `workingDir`.** Yang tersedia hanya `draft.workingDir` di `handleWorkspaceCreated` (baris 332) — itu jalur *workspace baru dibuat*. Untuk workspace yang **dibuka kembali**, `working_dir` harus dibaca dari baris database (`fetchWorkspaces()` sudah mengembalikannya sebagai `WorkspaceRow.working_dir`) dan disimpan ke `WorkspaceData`.
 
-Perkiraan berkas tersentuh: `BridgeMindLayout.tsx` → `PaneTerminalManager.tsx` → `TerminalPanel.tsx` → `terminal-instances.ts`. Ini **refactor lintas berkas yang nyata**, bukan satu baris.
+Perkiraan berkas tersentuh: `PurpSpaceLayout.tsx` → `PaneTerminalManager.tsx` → `TerminalPanel.tsx` → `terminal-instances.ts`. Ini **refactor lintas berkas yang nyata**, bukan satu baris.
 
 **4.4 ⚠️ Tanyakan dulu ke user sebelum mengerjakannya** — ini di luar permintaan UI yang literal, meskipun jelas sejalan dengan aturan "database harus benar-benar terpakai".
 
@@ -210,7 +210,7 @@ Perkiraan berkas tersentuh: `BridgeMindLayout.tsx` → `PaneTerminalManager.tsx`
 Migrasi ini **destruktif**: dia men-drop `aingespace_github_connections` (berisi token OAuth terenkripsi) dan `aingespace_environment_variables`.
 **User harus mengonfirmasi sebelum dijalankan.** Kalau datanya harus selamat, perlu blok `insert … select` sebelum drop, dan perhatikan kolom yang berganti nama: `access_token` → `access_token_encrypted`, `value` → `value_encrypted`.
 
-**5.2 — Keputusan `user_prefs_aingespace`.** Belum dijawab user.
+**5.2 — Keputusan `user_prefs_purpspace`.** Belum dijawab user.
 
 **5.3 — Perilaku kartu Recent.** Saat ini kartu Recent **mengisi (prefill)** working folder + layout ke draft baru yang sedang dibuat — dia **tidak** membuka workspace lama itu. Alasannya: ini dialog "buat workspace baru"; mengklik kartu lalu tiba-tiba pindah ke workspace lama akan mengejutkan. **User belum mengonfirmasi** apakah ini yang dia mau.
 
@@ -262,26 +262,17 @@ npx eslint src/components/CreateWorkspaceDialog.tsx src/lib/workspace/paths.ts \
 ## §8 — Status Git
 
 ```
-HEAD  e3f9727  refactor: replace GitHub repo/branch with working directory in workspace creation flow
+HEAD  a393ca6  refactor: implement working directory handling in workspace creation flow
 branch master
-
- M buat-workspace-handoff-3.md
- M electron/channels.ts
- M electron/main.ts
- M electron/preload.ts
- M src/components/CreateWorkspaceDialog.tsx
- M src/lib/workspace/paths.ts
- M src/types/desktop.d.ts
-?? electron/fs-probe.ts
-?? buat-workspace-handoff-4.md
 ```
 
-Dua commit yang relevan, keduanya dibuat **user**, bukan agent:
+Tiga commit yang relevan, semuanya dibuat **user**, bukan agent:
 
 - `a5d3c48` — lapisan data (§2.1) + `electron/channels.ts` + `src/lib/workspace/paths.ts`.
-- `e3f9727` — dialog, dashboard, `BridgeMindLayout`, IPC picker (`electron/main.ts`, `preload.ts`, `desktop.d.ts`), `src/types/index.ts`.
+- `e3f9727` — dialog, dashboard, `PurpSpaceLayout`, IPC picker (`electron/main.ts`, `preload.ts`, `desktop.d.ts`), `src/types/index.ts`.
+- `a393ca6` — koreksi #1 + koreksi #2 (`electron/fs-probe.ts`, probe berjangka, panel panduan folder).
 
-Yang belum ter-commit adalah **koreksi #1 + koreksi #2**. `electron/fs-probe.ts` berkas **baru** — jangan lupa `git add` kalau user minta di-commit.
+Seluruh isi §1–§7 sudah ter-commit. Yang belum ter-commit sekarang adalah **rebrand PurpSpace** (§10).
 
 **Jangan commit/push tanpa diminta user.**
 
@@ -294,3 +285,125 @@ Yang belum ter-commit adalah **koreksi #1 + koreksi #2**. `electron/fs-probe.ts`
 - Kalau menemukan sesuatu yang salah dengan permintaan user, **katakan sekali dalam satu-dua kalimat, lalu tetap kerjakan** permintaan lengkapnya.
 - Laporkan apa adanya. Kalau ada yang gagal atau dilewati, sebutkan.
 - Bahasa UI: **Indonesia**. Komentar kode: **Inggris**, menjelaskan *kenapa*, bukan *apa*.
+
+---
+
+## §10 — Rebrand PurpSpace (tugas terpisah, sudah dikerjakan)
+
+Tugas tambahan dari user, di luar §1: **AiNgeSpace → PurpSpace**, dan logo tidak
+boleh lagi monogram "BM". User memutuskan tiga hal lewat pertanyaan eksplisit:
+
+1. **"BridgeMind" ikut diganti** menjadi PurpSpace — jadi tidak ada lagi dua nama
+   di repo ini. Judul window, installer, appId, folder config, semuanya.
+2. **Nama tabel database ikut di-rename**, lewat migrasi baru (10.3).
+3. **AiNgeCommit → PurpCommit**, **AiNgExplorer → PurpExplorer**.
+
+### 10.1 Aset logo
+
+| Berkas | Isi |
+|---|---|
+| `logo/wizard-fire-logo-v3.svg` | **Sumber kebenaran.** Empat kelopak api dalam formasi pinwheel, viewBox 512. Jangan diedit tanpa ikut memperbarui tiga turunan di bawah. |
+| `src/components/brand/PurpSpaceMark.tsx` | Komponen React. Prop `plate` (pelat gelap, default mati) dan `detail="mark" \| "full"`. Id gradien lewat `useId()` — **wajib**, karena dua mark tampil bersamaan (menu bar + sidebar) dan id duplikat membuat semuanya me-resolve ke instance pertama. |
+| `public/favicon.svg` | Statis, dengan pelat, kelopak di-zoom 1.18×. Tanpa crest/spark/bracket/blur — semuanya hilang di 16px. |
+| `scripts/make-icon.mjs` | Menulis `build/icon.png` untuk electron-builder. **Ditulis ulang total.** |
+
+**Tentang `make-icon.mjs`:** versi lama menggambar glyph `❯_` dengan signed
+distance field — artinya ia tidak pernah tahu logo sebenarnya. Versi baru
+**me-raster path bezier asli** dari SVG: parser subset (`M`/`L`/`C`/`Z` absolut),
+flattening 24 segmen per kurva, scanline fill aturan nonzero dengan 8 subsample
+vertikal dan cakupan horizontal analitik, plus gradien `objectBoundingBox` per
+path. Blur ambient dihitung tertutup lewat `erf` alih-alih benar-benar diblur.
+Kalau artwork berubah, **ganti string path di konstanta `PETALS`, jalankan
+`node scripts/make-icon.mjs`, selesai** — tidak ada geometri lain yang perlu
+disentuh. Berjalan ~1 detik di 512px, tanpa dependensi (sharp/canvas/ImageMagick
+tidak terpasang dan dua di antaranya butuh MSVC yang tidak ada di mesin ini).
+
+Mark dipasang di: rail sidebar (22px), header sidebar (18px), `Header.tsx` (16px),
+`MenuBar.tsx` (16px), `dashboard/page.tsx` (20px), dan `DesktopAuthHandoff.tsx`
+(40px). Yang terakhir dapat `title="PurpSpace"` karena itu satu-satunya tempat
+mark berdiri sendiri di tab browser tanpa chrome aplikasi lain di sekitarnya.
+
+**`PRODUCTS` di `CreateWorkspaceDialog.tsx` sengaja tetap pakai ikon lucide.**
+Ketiganya adalah ikon *kategori* yang sebaris (Terminal / GitBranch / FolderTree);
+menaruh mark berwarna penuh di salah satunya akan merusak barisan itu.
+
+### 10.2 Rename identifier
+
+Berkas yang pindah: `BridgeMindSidebar.tsx` → `PurpSpaceSidebar.tsx`,
+`BridgeMindLayout.tsx` → `PurpSpaceLayout.tsx`, `src/app/bridgemind/` →
+`src/app/purpspace/`.
+
+Yang ikut berganti dan **saling bergantung**, jadi jangan diubah setengah:
+
+- `window.bridgemind` → **`window.purpspace`** (`electron/preload.ts` +
+  `src/types/desktop.d.ts` + 5 titik baca).
+- Prefix channel IPC `bm:` → **`ps:`** di `electron/channels.ts`. Aman karena
+  `const enum` di-inline tsc ke main *dan* preload dari satu sumber yang sama —
+  keduanya selalu dibuild bersamaan. **`isolatedModules` tetap OFF** (§3.4).
+- Env var jembatan `BM_APP_VERSION`/`BM_OS_BUILD`/`BM_HOME_DIR` →
+  **`PS_*`**, plus `BM_DEV_URL`/`BM_DEV_PORT` → `PS_*` di `scripts/dev-desktop.mjs`.
+- Protokol deep link `aingespace://` → **`purpspace://`**
+  (`electron/main.ts`, `DesktopAuthBridge.tsx`, `DesktopAuthHandoff.tsx`).
+
+**Yang SENGAJA tidak ikut di-rename: token Tailwind `bm-*`**
+(`--color-bm-border`, `bg-bm-pane`, `text-bm-text-dim`, …). Ada **494 pemakaian**
+di `src/`, tidak satu pun terlihat user, dan kelas Tailwind yang salah ketik
+**tidak menghasilkan error apa pun** — hanya style yang diam-diam hilang. Rasio
+risiko terhadap manfaatnya jelek. Biarkan.
+
+### 10.3 Database — `003_rename_to_purpspace.sql`
+
+Tabel, index, constraint, trigger, dan fungsi `set_updated_at_*` semuanya
+di-rename `*_aingespace` → `*_purpspace`.
+
+- **Non-destruktif.** Hanya `alter … rename`; tidak ada drop, tidak ada
+  insert/select. Data dan ciphertext token tetap utuh. Ini **berbeda** dari 002
+  di §5.1 yang memang destruktif.
+- **Idempoten.** Tiap rename dijaga pengecekan katalog (`to_regclass`,
+  `pg_constraint`, `pg_trigger`, `pg_proc`), jadi dijalankan dua kali aman dan
+  di database yang belum kena 002 ia jadi no-op total.
+- Constraint bernama-implisit (`_pkey`, `_fkey`, `_key`) **ikut di-rename**,
+  karena `alter table … rename to` di Postgres tidak membawa serta index,
+  constraint, maupun trigger — dan nama-nama itu muncul di pesan error yang
+  dilihat user serta di `foreignKeyName` pada `src/types/database.ts`.
+- 001 dan 002 **tidak disentuh**: itu riwayat yang sudah dijalankan.
+
+⚠️ **Kode sudah memakai nama baru.** Sampai 003 dijalankan di Supabase SQL
+Editor, setiap query akan 500 `relation does not exist`. Blok verifikasi ada di
+kaki berkas migrasinya.
+
+### 10.4 Jalur upgrade yang harus user tahu
+
+- **`appId` berubah** `com.bridgemind.aingespace` → `com.purpspace.app`. Windows
+  mengenali install lewat appId, jadi installer PurpSpace pertama akan mendarat
+  **di samping** BridgeMind lama, bukan meng-upgrade-nya. Uninstall entri lama
+  sekali; rilis berikutnya normal kembali.
+- **`app.setName("PurpSpace")` memindahkan `userData`** dari `%APPDATA%\BridgeMind`
+  ke `%APPDATA%\PurpSpace`. `electron/env.ts` **membaca lokasi lama sebagai
+  fallback** supaya `.env.local` yang sudah ada tidak hilang diam-diam. Fallback
+  itu read-only; `scripts/install-env.mjs` menulis ke lokasi baru.
+- **Kunci localStorage sidebar** ikut berganti prefix. `PurpSpaceSidebar.tsx`
+  membaca kunci `aingespace:*` lama sebagai fallback, tidak pernah menulisnya.
+- Protokol lama `aingespace://` tidak lagi didaftarkan. Login desktop pertama
+  setelah rebrand mendaftarkan `purpspace://` sendiri saat app dijalankan.
+
+### 10.5 Dokumen riwayat sengaja dibiarkan
+
+`DESKTOP_HANDOFF_*_completed.md`, `database_handoff.md`, `v1.md`,
+`multi_terminal_handoff.md`, `buat-workspace-handoff{,-2,-3}.md`, dan
+`supabase/migrations/00{1,2}_*.sql` **masih menyebut AiNgeSpace/BridgeMind**.
+Itu catatan atas keadaan yang memang benar saat ditulis; menulis ulangnya akan
+memalsukan riwayat dan membuat nama migrasi di dalamnya tidak lagi cocok dengan
+nama berkas di disk.
+
+### 10.6 Verifikasi yang sudah dijalankan
+
+- `npx tsc --noEmit` → **bersih**.
+- `npx tsc -p tsconfig.electron.json --noEmit` → **bersih**.
+- `npx eslint` atas semua berkas tersentuh → **bersih**, kecuali satu error
+  pre-existing di `PurpSpaceLayout.tsx:296` (§7.1 poin 3 — jangan diperbaiki).
+- `node scripts/make-icon.mjs 512` → `build/icon.png` 512×512, terverifikasi
+  secara visual cocok dengan artwork sumber.
+
+**Belum dijalankan:** migrasi 003 di Supabase, dan `npm run electron:dev` untuk
+memeriksa mark di sidebar/menu bar secara langsung.

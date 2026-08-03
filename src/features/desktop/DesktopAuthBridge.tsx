@@ -9,7 +9,7 @@ import type { DesktopBridge } from "@/types/desktop"
  *
  * Flow: this component opens `/desktop-auth` in the user's real browser → the
  * browser signs in through Clerk's hosted pages and mints a sign-in ticket →
- * the ticket comes back over `aingespace://auth?ticket=…` → here it is traded
+ * the ticket comes back over `purpspace://auth?ticket=…` → here it is traded
  * for a session inside the Electron window's own cookie jar.
  *
  * Rendered from `ClerkProvider` rather than from the layout on purpose: that
@@ -22,7 +22,7 @@ import type { DesktopBridge } from "@/types/desktop"
 
 type Status = "idle" | "waiting" | "exchanging" | "error"
 
-const DEEP_LINK_SCHEME = "aingespace:"
+const DEEP_LINK_SCHEME = "purpspace:"
 const DEEP_LINK_ACTION = "auth"
 
 export function DesktopAuthBridge() {
@@ -34,10 +34,10 @@ export function DesktopAuthBridge() {
 
   // Read once, at first render. Safe without an effect because `ClerkProvider`
   // only renders this component after its own mount, so there is no server
-  // render and no hydration pass to disagree with — and `window.bridgemind` is
+  // render and no hydration pass to disagree with — and `window.purpspace` is
   // injected by the preload before any script runs, so it never changes later.
   const [desktop] = useState<DesktopBridge | null>(() =>
-    typeof window === "undefined" ? null : (window.bridgemind ?? null)
+    typeof window === "undefined" ? null : (window.purpspace ?? null)
   )
   const [status, setStatus] = useState<Status>("idle")
   const [error, setError] = useState<string | null>(null)

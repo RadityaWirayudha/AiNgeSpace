@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo } from "react"
+import { PurpSpaceMark } from "@/components/brand/PurpSpaceMark"
 
 /**
  * Renders in the user's browser, not in the app. Its only job is to hand the
@@ -9,7 +10,7 @@ import { useEffect, useMemo } from "react"
  */
 export function DesktopAuthHandoff({ ticket }: { ticket: string }) {
   const target = useMemo(
-    () => `aingespace://auth?ticket=${encodeURIComponent(ticket)}`,
+    () => `purpspace://auth?ticket=${encodeURIComponent(ticket)}`,
     [ticket]
   )
   useEffect(() => {
@@ -22,8 +23,12 @@ export function DesktopAuthHandoff({ ticket }: { ticket: string }) {
   return (
     <main className="min-h-screen flex items-center justify-center bg-bm-bg px-6">
       <div className="max-w-sm w-full rounded-md border border-bm-border bg-bm-pane p-6 text-center">
+        {/* This card renders in a browser tab, away from every other piece of
+            app chrome, so it is the one place the mark has to carry the whole
+            identity on its own. */}
+        <PurpSpaceMark className="size-10 mx-auto mb-4" title="PurpSpace" />
         <p className="text-[13px] font-medium text-bm-text">
-          Returning you to BridgeMind
+          Returning you to PurpSpace
         </p>
         <p className="mt-2 text-[11px] leading-relaxed text-bm-text-secondary">
           The desktop app should be signed in now. You can close this tab.
@@ -32,7 +37,7 @@ export function DesktopAuthHandoff({ ticket }: { ticket: string }) {
           href={target}
           className="mt-4 inline-flex items-center justify-center h-7 px-3 rounded-sm border border-bm-border bg-bm-pane-header text-[11px] text-bm-text hover:border-bm-live/40 transition-colors"
         >
-          Open BridgeMind
+          Open PurpSpace
         </a>
       </div>
     </main>

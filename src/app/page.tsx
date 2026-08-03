@@ -1,5 +1,5 @@
-import { BridgeMindLayout } from "@/features/workspace/BridgeMindLayout"
+import { PurpSpaceLayout } from "@/features/workspace/PurpSpaceLayout"
 
 export default function RootPage() {
-  return <BridgeMindLayout />
+  return <PurpSpaceLayout />
 }

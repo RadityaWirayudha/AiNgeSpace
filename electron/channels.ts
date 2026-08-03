@@ -6,7 +6,7 @@
  * where `require` is a polyfill that resolves `electron` plus a couple of Node
  * built-ins and nothing else — a relative `require("./channels")` throws
  * "module not found: ./channels" (verified against Electron 43), the
- * `contextBridge` call never runs, and `window.bridgemind` ends up silently
+ * `contextBridge` call never runs, and `window.purpspace` ends up silently
  * undefined. A const enum is inlined by tsc and its import erased, so the
  * emitted preload is self-contained while both sides still read one definition.
  *
@@ -14,14 +14,14 @@
  * inlining this depends on.
  */
 export const enum CH {
-  terminalCreate = "bm:terminal:create",
-  terminalWrite = "bm:terminal:write",
-  terminalResize = "bm:terminal:resize",
-  terminalKill = "bm:terminal:kill",
-  terminalData = "bm:terminal:data",
-  terminalExit = "bm:terminal:exit",
-  openExternal = "bm:shell:open-external",
-  chooseDirectory = "bm:dialog:choose-directory",
-  probeDirectory = "bm:fs:probe-directory",
-  deepLink = "bm:deep-link",
+  terminalCreate = "ps:terminal:create",
+  terminalWrite = "ps:terminal:write",
+  terminalResize = "ps:terminal:resize",
+  terminalKill = "ps:terminal:kill",
+  terminalData = "ps:terminal:data",
+  terminalExit = "ps:terminal:exit",
+  openExternal = "ps:shell:open-external",
+  chooseDirectory = "ps:dialog:choose-directory",
+  probeDirectory = "ps:fs:probe-directory",
+  deepLink = "ps:deep-link",
 }

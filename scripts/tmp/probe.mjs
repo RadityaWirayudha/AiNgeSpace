@@ -11,11 +11,11 @@ const url = env.NEXT_PUBLIC_SUPABASE_URL
 const key = env.SUPABASE_SERVICE_ROLE_KEY
 
 const tables = [
-  "aingespace_users", "aingespace_workspaces", "aingespace_terminals",
-  "aingespace_ai_sessions", "aingespace_github_connections",
-  "aingespace_environment_variables",
-  "workspaces_aingespace", "panes_aingespace",
-  "github_connections_aingespace", "env_vars_aingespace",
+  "purpspace_users", "purpspace_workspaces", "purpspace_terminals",
+  "purpspace_ai_sessions", "purpspace_github_connections",
+  "purpspace_environment_variables",
+  "workspaces_purpspace", "panes_purpspace",
+  "github_connections_purpspace", "env_vars_purpspace",
 ]
 
 for (const t of tables) {

@@ -17,7 +17,7 @@ export async function GET(
     // where the caller should simply be told the workspace is not theirs.
     const { data: workspace } = isUuid(workspaceId)
       ? await supabase
-          .from("workspaces_aingespace")
+          .from("workspaces_purpspace")
           .select("id")
           .eq("id", workspaceId)
           .eq("clerk_user_id", userId)
@@ -29,7 +29,7 @@ export async function GET(
     }
 
     const { data, error } = await supabase
-      .from("env_vars_aingespace")
+      .from("env_vars_purpspace")
       .select("id, key, value_encrypted, created_at, updated_at")
       .eq("workspace_id", workspaceId)
       .order("key", { ascending: true })

@@ -1,10 +1,11 @@
 /**
  * The terminal layout presets, in one place.
  *
- * These ids are written to `workspaces_aingespace.layout_preset`, and that
+ * These ids are written to `workspaces_purpspace.layout_preset`, and that
  * column carries a CHECK constraint listing exactly these six values — so this
- * file and `supabase/migrations/002_rewrite_aingespace_schema.sql` have to move
- * together.
+ * file and `supabase/migrations/002_rewrite_aingespace_schema.sql` (the table
+ * was named `workspaces_aingespace` when it was created; `003_rename_to_
+ * purpspace.sql` renamed it) have to move together.
  *
  * The list used to exist three times over: in the create dialog, and as a bare
  * string enum in both workspace route handlers. Only the dialog knew how many

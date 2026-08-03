@@ -2,7 +2,7 @@
  * Contract between the Electron preload bridge and the renderer.
  *
  * This file is the single source of truth for both sides: `electron/preload.ts`
- * imports these types, and the renderer sees `window.bridgemind` through the
+ * imports these types, and the renderer sees `window.purpspace` through the
  * global augmentation below. Keep the surface narrow — the whole point of the
  * bridge is that the renderer never touches `spawn` or `ipcRenderer` directly.
  */
@@ -97,7 +97,7 @@ export interface DesktopBridge {
    */
   probeDirectory(path: string): Promise<DirectoryProbe>
   /**
-   * Fires for every `aingespace://…` URL the OS hands to the app — currently the
+   * Fires for every `purpspace://…` URL the OS hands to the app — currently the
    * sign-in ticket coming back from the browser. Returns an unsubscribe
    * function. A link that arrives before the renderer subscribes is buffered by
    * the main process and replayed on the first subscription.
@@ -108,6 +108,6 @@ export interface DesktopBridge {
 declare global {
   interface Window {
     /** Present only when running inside the Electron shell. */
-    bridgemind?: DesktopBridge
+    purpspace?: DesktopBridge
   }
 }

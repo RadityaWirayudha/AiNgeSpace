@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="v3-bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stop-color="#1a1829" />
+      <stop offset="65%" stop-color="#121118" />
+      <stop offset="100%" stop-color="#09090c" />
+    </radialGradient>
+
+    <!-- Quadrant Color Gradients -->
+    <linearGradient id="v3-grad-tl" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6b21a8" />
+      <stop offset="60%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+
+    <linearGradient id="v3-grad-tr" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="60%" stop-color="#c026d3" />
+      <stop offset="100%" stop-color="#f472b6" />
+    </linearGradient>
+
+    <linearGradient id="v3-grad-bl" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#581c87" />
+      <stop offset="60%" stop-color="#7e22ce" />
+      <stop offset="100%" stop-color="#e879f9" />
+    </linearGradient>
+
+    <linearGradient id="v3-grad-br" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a21caf" />
+      <stop offset="60%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#fb7185" />
+    </linearGradient>
+
+    <!-- Inner Core Light -->
+    <linearGradient id="v3-core-light" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#f0abfc" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Smooth Soft Glow -->
+    <filter id="v3-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="v3-ambient" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="30" result="blur" />
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="96" fill="url(#v3-bg)" />
+
+  <!-- Ambient Backdrop Glow -->
+  <circle cx="256" cy="256" r="130" fill="#9333ea" opacity="0.18" filter="url(#v3-ambient)" />
+  <circle cx="256" cy="256" r="80" fill="#ec4899" opacity="0.15" filter="url(#v3-ambient)" />
+
+  <!-- Outer Geometric Arcane Crest -->
+  <g opacity="0.2">
+    <circle cx="256" cy="256" r="170" fill="none" stroke="url(#v3-grad-tr)" stroke-width="1.5" stroke-dasharray="6 10" />
+    <circle cx="256" cy="256" r="148" fill="none" stroke="url(#v3-grad-tl)" stroke-width="1.5" />
+  </g>
+
+  <!-- 4 FLAME QUADRANTS (Windows layout spacing, clean negative space center) -->
+  <g filter="url(#v3-glow)">
+
+    <!-- TOP-LEFT FLAME QUADRANT -->
+    <g class="flame-tl">
+      <!-- Main Flame Body -->
+      <path d="M 235,115
+               C 175,120 128,160 132,222
+               C 134,242 148,246 164,238
+               C 186,226 204,202 218,178
+               C 228,160 236,138 235,115 Z"
+            fill="url(#v3-grad-tl)" />
+      <!-- Flame Core Overlay -->
+      <path d="M 224,136
+               C 186,146 156,176 158,212
+               C 168,206 185,190 198,170
+               C 208,154 218,142 224,136 Z"
+            fill="url(#v3-core-light)" opacity="0.75" />
+    </g>
+
+    <!-- TOP-RIGHT FLAME QUADRANT -->
+    <g class="flame-tr">
+      <!-- Main Flame Body -->
+      <path d="M 277,115
+               C 337,120 384,160 380,222
+               C 378,242 364,246 348,238
+               C 326,226 308,202 294,178
+               C 284,160 276,138 277,115 Z"
+            fill="url(#v3-grad-tr)" />
+      <!-- Flame Core Overlay -->
+      <path d="M 288,136
+               C 326,146 356,176 354,212
+               C 344,206 327,190 314,170
+               C 304,154 294,142 288,136 Z"
+            fill="url(#v3-core-light)" opacity="0.75" />
+    </g>
+
+    <!-- BOTTOM-LEFT FLAME QUADRANT -->
+    <g class="flame-bl">
+      <!-- Main Flame Body -->
+      <path d="M 132,274
+               C 134,336 175,382 235,387
+               C 236,364 228,342 218,324
+               C 204,300 186,276 164,264
+               C 148,256 134,260 132,274 Z"
+            fill="url(#v3-grad-bl)" />
+      <!-- Flame Core Overlay -->
+      <path d="M 158,290
+               C 156,326 186,356 224,366
+               C 218,360 208,348 198,332
+               C 185,312 168,296 158,290 Z"
+            fill="url(#v3-core-light)" opacity="0.65" />
+    </g>
+
+    <!-- BOTTOM-RIGHT FLAME QUADRANT -->
+    <g class="flame-br">
+      <!-- Main Flame Body -->
+      <path d="M 380,274
+               C 378,336 337,382 277,387
+               C 276,364 284,342 294,324
+               C 308,300 326,276 348,264
+               C 364,256 378,260 380,274 Z"
+            fill="url(#v3-grad-br)" />
+      <!-- Flame Core Overlay -->
+      <path d="M 354,290
+               C 356,326 326,356 288,366
+               C 294,360 304,348 314,332
+               C 327,312 344,296 354,290 Z"
+            fill="url(#v3-core-light)" opacity="0.65" />
+    </g>
+
+  </g>
+
+  <!-- Clean Floating Arcane Spark Particles (No center dot) -->
+  <g fill="#ffffff">
+    <circle cx="230" cy="85" r="2.5" opacity="0.8" />
+    <circle cx="282" cy="85" r="2.5" fill="#f472b6" opacity="0.9" />
+    <circle cx="395" cy="180" r="2" fill="#e879f9" opacity="0.7" />
+    <circle cx="117" cy="180" r="2" fill="#c084fc" opacity="0.7" />
+    <circle cx="230" cy="415" r="2" opacity="0.7" />
+    <circle cx="282" cy="415" r="2.5" fill="#fb7185" opacity="0.8" />
+  </g>
+
+  <!-- Elegant Corner Arcane Accents -->
+  <g opacity="0.3" fill="none" stroke="url(#v3-grad-tr)" stroke-width="1.5">
+    <path d="M 120,120 L 140,120 M 120,120 L 120,140" />
+    <path d="M 392,120 L 372,120 M 392,120 L 392,140" />
+    <path d="M 120,392 L 140,392 M 120,392 L 120,372" />
+    <path d="M 392,392 L 372,392 M 392,392 L 392,372" />
+  </g>
+</svg>

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { app } from "electron"
 
 /**
@@ -36,13 +36,21 @@ export interface ResolvedEnv {
  * Secrets are deliberately NOT bundled into the installer (see
  * DESKTOP_STATUS.md §Keamanan). Resolution order:
  *
- *   1. `%APPDATA%/BridgeMind/.env.local` — the supported production location.
- *   2. The repo `.env.local` — dev only, when running from source.
- *   3. `resources/.env.local` — only exists if someone opted into bundling.
+ *   1. `%APPDATA%/PurpSpace/.env.local` — the supported production location.
+ *   2. `%APPDATA%/BridgeMind/.env.local` — where it lived before the rebrand.
+ *      `app.setName` moved userData, and an existing install's credentials
+ *      would otherwise vanish on upgrade with nothing to explain it. Read only;
+ *      `scripts/install-env.mjs` writes the new path.
+ *   3. The repo `.env.local` — dev only, when running from source.
+ *   4. `resources/.env.local` — only exists if someone opted into bundling.
  */
+const LEGACY_APP_NAME = "BridgeMind"
+
 export function resolveRuntimeEnv(projectRoot: string): ResolvedEnv {
+  const userData = app.getPath("userData")
   const candidates = [
-    join(app.getPath("userData"), ".env.local"),
+    join(userData, ".env.local"),
+    join(dirname(userData), LEGACY_APP_NAME, ".env.local"),
     ...(app.isPackaged ? [] : [join(projectRoot, ".env.local")]),
     join(process.resourcesPath ?? "", ".env.local"),
   ]

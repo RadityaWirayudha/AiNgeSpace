@@ -69,14 +69,14 @@ function subscribe<T extends DataCb | ExitCb>(
 const bridge: DesktopBridge = {
   isDesktop: true,
   platform: process.platform,
-  appVersion: process.env.BM_APP_VERSION ?? "0.0.0",
+  appVersion: process.env.PS_APP_VERSION ?? "0.0.0",
   // Set by the main process before the window is created. `os` is not reachable
   // from a sandboxed preload, so it travels as an env var the same way the app
   // version already does.
-  osBuild: Number(process.env.BM_OS_BUILD ?? "0") || 0,
+  osBuild: Number(process.env.PS_OS_BUILD ?? "0") || 0,
   // Same route as the two above: `os.homedir()` is not reachable from a
   // sandboxed preload, so the main process hands it over as an env var.
-  homeDir: process.env.BM_HOME_DIR ?? "",
+  homeDir: process.env.PS_HOME_DIR ?? "",
   terminal: {
     create: (id: string, opts?: TerminalCreateOptions): Promise<TerminalCreateResult> =>
       ipcRenderer.invoke(CH.terminalCreate, id, opts ?? {}),
@@ -108,4 +108,4 @@ const bridge: DesktopBridge = {
   },
 }
 
-contextBridge.exposeInMainWorld("bridgemind", bridge)
+contextBridge.exposeInMainWorld("purpspace", bridge)

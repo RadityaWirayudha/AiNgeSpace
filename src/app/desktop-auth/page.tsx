@@ -9,7 +9,7 @@ import { DesktopAuthHandoff } from "./DesktopAuthHandoff"
  * page is opened in the browser, is protected like any other route (so Clerk's
  * proxy sends the visitor through the normal hosted sign-in first), and once a
  * session exists it mints a short-lived sign-in token for that same user. The
- * token travels back over the `aingespace://` deep link and the renderer trades
+ * token travels back over the `purpspace://` deep link and the renderer trades
  * it for a session of its own — see `DesktopAuthBridge`.
  *
  * OAuth is deliberately never rendered inside the Electron window; that is the

@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     // inserted, after which `.single()` in /api/github/repos failed forever.
     // UNIQUE(clerk_user_id) on the table is what makes this safe.
     const { error } = await supabase
-      .from("github_connections_aingespace")
+      .from("github_connections_purpspace")
       .upsert(
         {
           clerk_user_id: userId,

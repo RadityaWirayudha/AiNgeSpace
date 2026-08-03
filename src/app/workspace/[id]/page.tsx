@@ -12,8 +12,8 @@ export default function WorkspacePage({
 }) {
   const { id } = use(params)
 
-  // The layout used to arrive through a one-shot "aingespace:pending-layout"
-  // entry in localStorage, which meant it was gone on the second visit and
+  // The layout used to arrive through a one-shot pending-layout entry in
+  // localStorage, which meant it was gone on the second visit and
   // absent entirely on another machine. It is a column on the workspace row
   // now, so the page just reads it back.
   const [terminalCount, setTerminalCount] = useState<number | null>(null)

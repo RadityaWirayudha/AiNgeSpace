@@ -1,6 +1,11 @@
-appId: com.bridgemind.aingespace
-productName: BridgeMind
-copyright: Copyright © 2026 BridgeMind
+# Windows identifies an installed app by this string, not by productName. It
+# used to be com.bridgemind.aingespace; an existing install carries the old id,
+# so the first PurpSpace installer lands beside it rather than upgrading it.
+# Uninstall the old BridgeMind entry once, and every release after this one
+# upgrades normally.
+appId: com.purpspace.app
+productName: PurpSpace
+copyright: Copyright © 2026 PurpSpace
 
 directories:
   output: dist
@@ -73,13 +78,13 @@ win:
 # second target overwrite the first — the run ends with one file that looks like
 # the installer but is actually the portable build. Name them apart.
 nsis:
-  artifactName: BridgeMind-Setup-${version}-${arch}.${ext}
+  artifactName: PurpSpace-Setup-${version}-${arch}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: BridgeMind
+  shortcutName: PurpSpace
 
 portable:
-  artifactName: BridgeMind-Portable-${version}-${arch}.${ext}
+  artifactName: PurpSpace-Portable-${version}-${arch}.${ext}

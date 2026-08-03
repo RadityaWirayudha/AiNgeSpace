@@ -18,7 +18,7 @@ async function ownsWorkspace(
   if (!isUuid(workspaceId)) return false
 
   const { data } = await supabase
-    .from("workspaces_aingespace")
+    .from("workspaces_purpspace")
     .select("id")
     .eq("id", workspaceId)
     .eq("clerk_user_id", userId)
@@ -28,7 +28,7 @@ async function ownsWorkspace(
 }
 
 const upsertEnvSchema = z.object({
-  // Matches env_vars_aingespace_key_format. Rejecting "npm run dev" here means
+  // Matches env_vars_purpspace_key_format. Rejecting "npm run dev" here means
   // it never reaches the PTY environment as a broken variable name.
   key: z
     .string()
@@ -53,7 +53,7 @@ export async function GET(
     // Ciphertext is deliberately absent from this listing; /decrypt is the one
     // endpoint that hands values back.
     const { data, error } = await supabase
-      .from("env_vars_aingespace")
+      .from("env_vars_purpspace")
       .select("id, key, created_at, updated_at")
       .eq("workspace_id", workspaceId)
       .order("key", { ascending: true })
@@ -89,7 +89,7 @@ export async function POST(
     // case, and the old handler answered it with a 409 that left the caller to
     // delete and re-create the row just to change a value.
     const { data, error } = await supabase
-      .from("env_vars_aingespace")
+      .from("env_vars_purpspace")
       .upsert(
         {
           workspace_id: workspaceId,
@@ -138,7 +138,7 @@ export async function DELETE(
     }
 
     const { error } = await supabase
-      .from("env_vars_aingespace")
+      .from("env_vars_purpspace")
       .delete()
       .eq("id", envId)
       .eq("workspace_id", workspaceId)
