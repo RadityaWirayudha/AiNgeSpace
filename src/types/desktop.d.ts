@@ -27,6 +27,35 @@ export interface TerminalExitPayload {
   signal?: number
 }
 
+export type DirectoryProblem =
+  /** Nothing at this path. */
+  | "missing"
+  /** Something is there, but a terminal cannot start in it. */
+  | "not-directory"
+  /** It exists and the OS will not let us look. */
+  | "denied"
+
+/**
+ * What the main process found at a path. `ok` decides whether a workspace may
+ * point at it; the rest exists so the user can be told *where they actually
+ * are* rather than only that they are wrong.
+ */
+export interface DirectoryProbe {
+  /** The path as the OS spells it: `~` expanded, separators canonical. The
+   *  renderer adopts this so the field matches the file explorer exactly. */
+  path: string
+  ok: boolean
+  /** Null when `ok`. */
+  reason: DirectoryProblem | null
+  /** Deepest ancestor that does exist — equal to `path` when `ok`. Empty only
+   *  if even the root is gone (a disconnected network drive). */
+  nearest: string
+  /** Sub-folder names directly inside `nearest`, alphabetical, capped. */
+  children: string[]
+  /** True when `children` was cut short. */
+  more: boolean
+}
+
 export interface DesktopTerminalApi {
   create(id: string, opts?: TerminalCreateOptions): Promise<TerminalCreateResult>
   write(id: string, data: string): void
@@ -48,6 +77,12 @@ export interface DesktopBridge {
    * the first time a pane is resized.
    */
   readonly osBuild: number
+  /**
+   * The user's home folder, as the OS spells it. Travels as an env var rather
+   * than an IPC call so the working-folder field can be seeded during the first
+   * render instead of after an effect.
+   */
+  readonly homeDir: string
   terminal: DesktopTerminalApi
   /** Opens a URL in the user's real browser instead of inside the app window. */
   openExternal(url: string): Promise<boolean>
@@ -56,6 +91,11 @@ export interface DesktopBridge {
    * user cancelled. `defaultPath` only suggests where to start.
    */
   chooseDirectory(defaultPath?: string): Promise<string | null>
+  /**
+   * Checks a path against the real filesystem. Never rejects — a path that
+   * cannot be read comes back as a `DirectoryProbe` explaining why.
+   */
+  probeDirectory(path: string): Promise<DirectoryProbe>
   /**
    * Fires for every `aingespace://…` URL the OS hands to the app — currently the
    * sign-in ticket coming back from the browser. Returns an unsubscribe

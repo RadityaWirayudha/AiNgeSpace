@@ -22,5 +22,6 @@ export const enum CH {
   terminalExit = "bm:terminal:exit",
   openExternal = "bm:shell:open-external",
   chooseDirectory = "bm:dialog:choose-directory",
+  probeDirectory = "bm:fs:probe-directory",
   deepLink = "bm:deep-link",
 }

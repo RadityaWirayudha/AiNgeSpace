@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron"
 import { CH } from "./channels"
 import type {
   DesktopBridge,
+  DirectoryProbe,
   TerminalCreateOptions,
   TerminalCreateResult,
   TerminalExitPayload,
@@ -73,6 +74,9 @@ const bridge: DesktopBridge = {
   // from a sandboxed preload, so it travels as an env var the same way the app
   // version already does.
   osBuild: Number(process.env.BM_OS_BUILD ?? "0") || 0,
+  // Same route as the two above: `os.homedir()` is not reachable from a
+  // sandboxed preload, so the main process hands it over as an env var.
+  homeDir: process.env.BM_HOME_DIR ?? "",
   terminal: {
     create: (id: string, opts?: TerminalCreateOptions): Promise<TerminalCreateResult> =>
       ipcRenderer.invoke(CH.terminalCreate, id, opts ?? {}),
@@ -87,6 +91,8 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(CH.openExternal, url),
   chooseDirectory: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke(CH.chooseDirectory, defaultPath),
+  probeDirectory: (path: string): Promise<DirectoryProbe> =>
+    ipcRenderer.invoke(CH.probeDirectory, path),
   onDeepLink: (cb: LinkCb) => {
     linkSubs.add(cb)
     if (pendingLink !== null) {

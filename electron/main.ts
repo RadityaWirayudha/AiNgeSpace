@@ -3,6 +3,7 @@ import { release } from "node:os"
 import { join, resolve } from "node:path"
 import { CH } from "./channels"
 import { resolveRuntimeEnv } from "./env"
+import { probeDirectory } from "./fs-probe"
 import { PtyManager } from "./pty-manager"
 import { startNextServer, type NextServerHandle } from "./next-server"
 import type { TerminalCreateOptions } from "../src/types/desktop"
@@ -128,6 +129,11 @@ function registerIpc(manager: PtyManager) {
     })
     return canceled ? null : (filePaths[0] ?? null)
   })
+
+  // Lets the working-folder prompt hold itself to what is really on disk. It
+  // reads directory names, so it stays a read-only probe: no create, no move,
+  // no file contents.
+  ipcMain.handle(CH.probeDirectory, (_e, path: unknown) => probeDirectory(path))
 }
 
 /** URLs that arrived before a renderer existed to receive them. */
@@ -162,6 +168,10 @@ async function boot() {
   log(source ? `env loaded from ${source}` : "no .env.local found — server routes will fail")
 
   const home = app.getPath("home")
+  // Read by the preload to seed the workspace dialog's working folder. Set
+  // before the window exists, because the renderer process inherits this
+  // environment when it is spawned and never sees later changes.
+  process.env.BM_HOME_DIR = home
   // Typing in a pane should land somewhere useful: the repo in dev, home in prod.
   const fallbackCwd = isDev ? projectRoot : home
 

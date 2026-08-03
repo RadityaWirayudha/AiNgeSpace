@@ -62,11 +62,30 @@ export function normalizePath(path: string): string {
 }
 
 /**
- * Applies what the user typed into the working-folder field.
+ * Descends one named step from `base` — "C:\Users\user" + "Documents".
  *
- * The field doubles as a `cd` prompt — that is the hint printed under it — so
- * "cd ../other-project" is resolved against the folder already in the field,
- * exactly as a shell would. Anything that is not a `cd` is taken as a path.
+ * `segment` comes from a directory listing the main process actually read, so
+ * there is nothing to sanitise here; the normalisation is only there to keep the
+ * separator consistent with whatever `base` already uses.
+ */
+export function joinPath(base: string, segment: string): string {
+  const trimmed = base.trim()
+  if (!trimmed) return normalizePath(segment)
+  return normalizePath(`${trimmed}${separatorOf(trimmed)}${segment}`)
+}
+
+/**
+ * Applies a line typed into the working-folder prompt.
+ *
+ * `current` is the folder shown in the box above the prompt; the box itself is
+ * not typeable, so this is the only way to move it by keyboard. "cd
+ * ../other-project" resolves against `current` exactly as a shell would, and a
+ * line that is not a `cd` is taken as a path in its own right — someone pasting
+ * "D:\work\api" into a prompt means to go there.
+ *
+ * Whether the result exists is not decided here. The Electron main process
+ * answers that (`electron/fs-probe.ts`), because it is the only side that can
+ * see the disk.
  */
 export function applyWorkingDirInput(current: string, input: string): string {
   const typed = input.trim()
@@ -79,9 +98,7 @@ export function applyWorkingDirInput(current: string, input: string): string {
   if (!argument) return normalizePath(current)
   if (isAbsolutePath(argument)) return normalizePath(argument)
 
-  const base = current.trim()
-  if (!base) return normalizePath(argument)
-  return normalizePath(`${base}${separatorOf(base)}${argument}`)
+  return joinPath(current, argument)
 }
 
 /** The last segment, used for pane titles: "C:\work\api" → "api". */
