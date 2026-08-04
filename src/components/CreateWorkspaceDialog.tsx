@@ -18,17 +18,8 @@ import {
   FolderTree,
   GitBranch,
   Terminal,
-  Layers,
-  Server,
-  Boxes,
-  Brain,
-  BookOpen,
-  Settings2,
   History,
-  Bot,
-  Cpu,
-  Sparkles,
-  Zap,
+  Mic,
   Play,
   AlertCircle,
 } from "lucide-react"
@@ -41,6 +32,7 @@ import {
   type LayoutPreset,
 } from "@/lib/workspace/layouts"
 import { applyWorkingDirInput, compactPath, joinPath } from "@/lib/workspace/paths"
+import { AGENT_OPTIONS } from "@/lib/workspace/agents"
 import {
   fetchWorkspaces,
   type WorkspaceRow,
@@ -84,6 +76,14 @@ const STEPS = [
 const RECENT_LIMIT = 6
 
 /**
+ * "loading" and "ready with nothing" are different things to say, and saying the
+ * second while the first is true reads as "you have never made a workspace" to
+ * someone who has made twenty. `offline` covers signed-out as well: from here the
+ * two are indistinguishable and the advice is the same.
+ */
+type RecentStatus = "loading" | "ready" | "offline"
+
+/**
  * Deliberately UI only. Two of the three do not exist yet, and the workspace row
  * has no column for this — a field that can only ever hold one value carries no
  * information. Give it a column on the day a second product can actually be
@@ -122,27 +122,29 @@ const DEFAULT_PRODUCT = "purpspace"
 const LAYOUTS = LAYOUT_PRESETS
 
 /**
- * Not wired up yet — the tiles render disabled under a Coming Soon badge, so
- * this list is labels only. The layout and agent set each preset used to apply
- * were removed with it: an unread field is a promise the code does not keep, and
- * the pairing will be redesigned when the feature is actually built.
+ * A preset is a whole draft in one click: the folder, the layout, and the agents.
+ * Every field here is read when the tile is clicked — `applyPreset` sets exactly
+ * these three things and nothing else, so adding a field means wiring it there
+ * too rather than leaving it as decoration.
+ *
+ * `workingDir` is an absolute path on the machine this build runs on. The tile
+ * still probes the folder like any other choice, so a preset pointing at a folder
+ * that has been moved or deleted is refused at the footer with the usual reason
+ * instead of creating a workspace whose terminals start somewhere else.
  */
 const PRESETS = [
-  { id: "p1", name: "Frontend", icon: Layers, desc: "UI, komponen, styling" },
-  { id: "p2", name: "Backend", icon: Server, desc: "API, layanan, data" },
-  { id: "p3", name: "Fullstack", icon: Boxes, desc: "Klien dan server bersamaan" },
-  { id: "p4", name: "AI Dev", icon: Brain, desc: "Model + aplikasi paralel" },
-  { id: "p5", name: "Riset", icon: BookOpen, desc: "Notebook dan eksplorasi" },
-  { id: "p6", name: "DevOps", icon: Settings2, desc: "Infra, pipeline, pemantauan" },
+  {
+    id: "purpvoice",
+    name: "PurpVoice",
+    icon: Mic,
+    desc: "Opencode di folder PurpVoice, izin otomatis.",
+    workingDir: "C:\\Users\\user\\2026 3\\PurpVoice",
+    layoutId: "l1",
+    agentIds: ["opencode"],
+  },
 ] as const
 
-const AGENTS = [
-  { id: "a1", name: "Frontline", provider: "Anthropic", model: "Sonnet 5", icon: Bot, desc: "Membaca dan mengedit kode UI, menjaga komponen tetap sinkron.", tokens: "~4k / turn" },
-  { id: "a2", name: "Backline", provider: "Anthropic", model: "Sonnet 5", icon: Cpu, desc: "Mengelola layanan, migrasi, dan kontrak API.", tokens: "~6k / turn" },
-  { id: "a3", name: "Reviewer", provider: "Anthropic", model: "Haiku 4.5", icon: Sparkles, desc: "Tinjauan cepat pada diff sebelum masuk.", tokens: "~1.5k / turn" },
-  { id: "a4", name: "Analyst", provider: "Anthropic", model: "Opus 4.8", icon: Zap, desc: "Penalaran mendalam untuk data dan tugas riset.", tokens: "~9k / turn" },
-  { id: "a5", name: "Watcher", provider: "Anthropic", model: "Haiku 4.5", icon: Terminal, desc: "Memantau log dan pipeline, menandai kegagalan.", tokens: "~1k / turn" },
-] as const
+const AGENTS = AGENT_OPTIONS
 
 /* ------------------------------------------------------------------
    GRID PREVIEW
@@ -620,13 +622,18 @@ function WorkingFolderStep({
 -------------------------------------------------------------------*/
 function RecentSection({
   items,
+  status,
   onPick,
 }: {
   items: WorkspaceRow[]
+  status: RecentStatus
   onPick: (row: WorkspaceRow) => void
 }) {
-  // Nothing to recall yet. An empty box teaches a first-time user nothing.
-  if (items.length === 0) return null
+  // Hiding the section while it is empty was the old behaviour, and it taught a
+  // first-time user nothing: the heading simply appeared one day. An empty state
+  // that names the cause and the next step is the standard fix — say why the box
+  // is blank, say what will fill it, and get out of the way.
+  const empty = status !== "loading" && items.length === 0
 
   return (
     <div>
@@ -634,12 +641,64 @@ function RecentSection({
         <div className="flex items-center gap-2">
           <History className="size-3.5 text-zinc-500" />
           <span className="text-[13px] font-semibold text-foreground">Recent</span>
-          <Badge variant="secondary" className="text-[11px] font-mono">
-            {items.length}
-          </Badge>
+          {/* A "0" badge is noise next to a message that already says nothing is
+              here, and during the fetch it would be a number we do not know. */}
+          {items.length > 0 && (
+            <Badge variant="secondary" className="text-[11px] font-mono">
+              {items.length}
+            </Badge>
+          )}
         </div>
-        <span className="text-[11px] text-zinc-500">Workspace terakhir dibuka</span>
+        <span className="text-[11px] text-zinc-500">
+          {empty ? "Belum ada riwayat" : "Workspace terakhir dibuka"}
+        </span>
       </div>
+
+      {status === "loading" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" aria-hidden="true">
+          {/* Two placeholders rather than nothing: the section is about to be
+              either a grid or a message, and both are taller than zero. */}
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              className="h-[58px] rounded-lg border border-border bg-secondary/40 animate-pulse"
+            />
+          ))}
+        </div>
+      )}
+
+      {empty && (
+        <div className="rounded-lg border border-dashed border-border bg-secondary/30 px-4 py-5 text-center">
+          <span className="mx-auto mb-2.5 flex size-8 items-center justify-center rounded-lg bg-zinc-800">
+            <History className="size-4 text-zinc-500" strokeWidth={1.9} />
+          </span>
+          {status === "offline" ? (
+            <>
+              <p className="text-[13px] font-semibold text-foreground">
+                Riwayat workspace tidak bisa dimuat
+              </p>
+              <p className="mx-auto mt-1 max-w-[42ch] text-[11px] leading-relaxed text-zinc-500">
+                Kamu sedang offline atau belum masuk ke akunmu. Ini cuma jalan
+                pintas — pembuatan workspace tetap bisa dilanjutkan seperti biasa.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13px] font-semibold text-foreground">
+                Kamu belum pernah membuat workspace
+              </p>
+              <p className="mx-auto mt-1 max-w-[44ch] text-[11px] leading-relaxed text-zinc-500">
+                Setelah workspace pertamamu jadi, ia muncul di sini. Sekali klik
+                akan mengisi ulang folder kerja dan layout-nya, jadi kamu tidak
+                perlu mengatur dari nol lagi.
+              </p>
+              <p className="mt-2 text-[11px] text-zinc-600">
+                Lanjutkan saja di bawah — yang ini akan jadi yang pertama.
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {items.map((row) => (
@@ -680,12 +739,18 @@ function LayoutStep({
   layoutId,
   setLayoutId,
   recent,
+  recentStatus,
   onPickRecent,
+  activePresetId,
+  onApplyPreset,
 }: {
   layoutId: string
   setLayoutId: (v: string) => void
   recent: WorkspaceRow[]
+  recentStatus: RecentStatus
   onPickRecent: (row: WorkspaceRow) => void
+  activePresetId: string | null
+  onApplyPreset: (preset: (typeof PRESETS)[number]) => void
 }) {
   const active = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
 
@@ -743,40 +808,73 @@ function LayoutStep({
         </div>
       </div>
 
-      <RecentSection items={recent} onPick={onPickRecent} />
+      <RecentSection
+        items={recent}
+        status={recentStatus}
+        onPick={onPickRecent}
+      />
 
       <div>
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[13px] font-semibold text-foreground">Presets</span>
-          <Badge
-            variant="outline"
-            className="text-[10px] border-zinc-700 text-zinc-500"
-          >
-            Coming Soon
+          <Badge variant="secondary" className="text-[11px] font-mono">
+            {PRESETS.length}
           </Badge>
         </div>
         <p className="text-[11px] text-zinc-500 mb-3">
-          Layout dan agen dalam satu klik. Belum aktif.
+          Folder, layout, dan agen dalam satu klik.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PRESETS.map((p) => {
             const Icon = p.icon
+            const on = p.id === activePresetId
+            const agentNames = p.agentIds
+              .map((id) => AGENTS.find((a) => a.id === id)?.name ?? id)
+              .join(" · ")
             return (
-              <div
+              <button
                 key={p.id}
-                aria-hidden="true"
-                className="text-left flex flex-col gap-2 p-3 rounded-lg border bg-secondary/40 border-border/60 opacity-50 select-none"
+                type="button"
+                aria-pressed={on}
+                onClick={() => onApplyPreset(p)}
+                title={p.workingDir}
+                className={cn(
+                  "text-left flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
+                  on
+                    ? "bg-purple/10 border-purple"
+                    : "bg-secondary border-border hover:border-zinc-500"
+                )}
               >
-                <span className="size-6 rounded-md bg-zinc-800 flex items-center justify-center">
-                  <Icon className="size-3.5 text-zinc-400" strokeWidth={1.9} />
+                <span
+                  className={cn(
+                    "size-6 rounded-md flex items-center justify-center",
+                    on ? "bg-purple" : "bg-zinc-800"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "size-3.5",
+                      on ? "text-[#0E0E10]" : "text-zinc-400"
+                    )}
+                    strokeWidth={1.9}
+                  />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[13px] font-semibold text-foreground">
                     {p.name}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">{p.desc}</div>
+                  {/* The two things the click actually changes, spelled out —
+                      a preset that silently moved the working folder somewhere
+                      else would be a nasty surprise three steps later. */}
+                  <div className="text-[10px] text-zinc-600 font-mono mt-1.5 truncate">
+                    {compactPath(p.workingDir)}
+                  </div>
+                  <div className="text-[10px] text-zinc-600 truncate">
+                    {terminalCountFor(p.layoutId)} terminal · {agentNames}
+                  </div>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
@@ -913,6 +1011,7 @@ export function CreateWorkspaceDialog({
   )
   const [layoutId, setLayoutId] = useState("l1")
   const [recent, setRecent] = useState<WorkspaceRow[]>([])
+  const [recentStatus, setRecentStatus] = useState<RecentStatus>("loading")
   const [agents, setAgents] = useState<Record<string, boolean>>({ a1: true })
   const [submitting, setSubmitting] = useState(false)
   /** A folder check is in flight from one of the footer buttons. Separate from
@@ -1021,11 +1120,14 @@ export function CreateWorkspaceDialog({
           (a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)
         )
         setRecent(byTime.slice(0, RECENT_LIMIT))
+        setRecentStatus("ready")
       })
       .catch(() => {
         // Recent is a shortcut, not a requirement. Signed out or offline, the
-        // section simply does not appear — it must never block creation.
-        if (!cancelled) setRecent([])
+        // section says so and steps aside — it must never block creation.
+        if (cancelled) return
+        setRecent([])
+        setRecentStatus("offline")
       })
 
     return () => {
@@ -1377,7 +1479,10 @@ export function CreateWorkspaceDialog({
                 layoutId={layoutId}
                 setLayoutId={setLayoutId}
                 recent={recent}
+                recentStatus={recentStatus}
                 onPickRecent={pickRecent}
+                activePresetId={activePresetId}
+                onApplyPreset={applyPreset}
               />
             </div>
           )}
