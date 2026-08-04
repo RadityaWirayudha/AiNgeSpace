@@ -22,9 +22,11 @@ import {
   PaneTerminalManager,
   TerminalHotkeys,
 } from "@/features/terminal/PaneTerminalManager"
+import { ShellLaunchProvider } from "@/features/terminal/shell-launch"
 import { ShortcutsDialogProvider } from "@/components/KeyboardShortcutsDialog"
 import { newUuid } from "@/lib/uuid"
 import { folderName } from "@/lib/workspace/paths"
+import { startupCommandsFor } from "@/lib/workspace/agents"
 import { cn } from "@/lib/utils"
 import { useTreeSync } from "./use-tree-sync"
 import {
@@ -55,6 +57,10 @@ interface WorkspaceData {
   name: string
   panes: PaneData[]
   agentIds: string[]
+  /** The folder every terminal in this workspace opens in. Undefined for rows
+   *  written before the field existed, and for the fallback workspace — both
+   *  fall back to the main process's default rather than guessing. */
+  workingDir?: string
   /** Panes load on first activation, not with the workspace list. */
   panesLoaded: boolean
   /** False for a workspace created while the API was unreachable. It lives in
@@ -210,6 +216,10 @@ function PurpSpaceInner() {
             name: row.name,
             panes: [],
             agentIds: row.agent_ids,
+            // Trimmed and emptiness-checked here rather than at the point of
+            // use: a blank string would reach node-pty as a cwd of "", which is
+            // not the same as "no preference".
+            workingDir: row.working_dir?.trim() || undefined,
             panesLoaded: false,
             persisted: true,
           }))
@@ -303,6 +313,15 @@ function PurpSpaceInner() {
   const activeWorkspace = workspaces.find((ws) => ws.id === activeWorkspaceId)
   const panes = activeWorkspace?.panes ?? []
 
+  /** What the workspace's agents run when a terminal first opens. Only agents
+   *  with a launcher produce anything; the rest are a record, not a process.
+   *
+   *  Not memoized: a fresh array every render is fine because the provider keys
+   *  its own memo on the joined contents, and wrapping this in `useMemo` gives
+   *  React Compiler a dependency it refuses to trust, which costs the whole
+   *  component its optimization. */
+  const startupCommands = startupCommandsFor(activeWorkspace?.agentIds ?? [])
+
   const buildPane = useCallback(
     (
       workspace: Pick<WorkspaceData, "id" | "persisted" | "agentIds">,
@@ -342,6 +361,7 @@ function PurpSpaceInner() {
         name: draft.name,
         panes: created.map((c) => c.pane),
         agentIds: draft.agentIds,
+        workingDir: draft.workingDir?.trim() || undefined,
         panesLoaded: true,
         persisted: draft.persisted,
       }
@@ -634,68 +654,73 @@ function PurpSpaceInner() {
         ) : panes.length === 0 ? (
           <EmptyState onCreate={addPane} />
         ) : (
-          <div
-            className={cn(
-              "grid gap-px flex-1 p-px min-h-0 min-w-0",
-              gridFor(visiblePanes.length)
-            )}
+          <ShellLaunchProvider
+            cwd={activeWorkspace?.workingDir}
+            startupCommands={startupCommands}
           >
-            {visiblePanes.map((pane) => {
-              const tree = paneTermState.trees[pane.id]
-              const leafCount = tree ? countLeaves(tree) : 1
-              return (
-                <Pane
-                  key={pane.id}
-                  title={pane.title}
-                  active={pane.id === activePaneId}
-                  activeRing={leafCount <= 1}
-                  status={pane.status}
-                  pinned={pane.pinned}
-                  flush
-                  className="h-full min-h-0"
-                  expanded={expandedPaneId === pane.id}
-                  onToggleExpand={() =>
-                    setExpandedPaneId((cur) =>
-                      cur === pane.id ? null : pane.id
-                    )
-                  }
-                  onPin={() => togglePin(pane.id)}
-                  onClose={() => closePane(activeWorkspaceId, pane.id)}
-                  footer={
-                    <div className="flex items-center justify-between w-full gap-2">
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-bm-text-dim">»</span>
-                        <span className="truncate">auto mode on</span>
-                        {!!pane.agentCount && (
-                          <span className="text-bm-text-dim shrink-0">
-                            · {pane.agentCount} agent
-                            {pane.agentCount === 1 ? "" : "s"}
+            <div
+              className={cn(
+                "grid gap-px flex-1 p-px min-h-0 min-w-0",
+                gridFor(visiblePanes.length)
+              )}
+            >
+              {visiblePanes.map((pane) => {
+                const tree = paneTermState.trees[pane.id]
+                const leafCount = tree ? countLeaves(tree) : 1
+                return (
+                  <Pane
+                    key={pane.id}
+                    title={pane.title}
+                    active={pane.id === activePaneId}
+                    activeRing={leafCount <= 1}
+                    status={pane.status}
+                    pinned={pane.pinned}
+                    flush
+                    className="h-full min-h-0"
+                    expanded={expandedPaneId === pane.id}
+                    onToggleExpand={() =>
+                      setExpandedPaneId((cur) =>
+                        cur === pane.id ? null : pane.id
+                      )
+                    }
+                    onPin={() => togglePin(pane.id)}
+                    onClose={() => closePane(activeWorkspaceId, pane.id)}
+                    footer={
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-bm-text-dim">»</span>
+                          <span className="truncate">auto mode on</span>
+                          {!!pane.agentCount && (
+                            <span className="text-bm-text-dim shrink-0">
+                              · {pane.agentCount} agent
+                              {pane.agentCount === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </span>
+                        {!pane.persisted && (
+                          <span
+                            title="Pane ini hanya ada di tab ini dan hilang saat reload."
+                            className="shrink-0 text-bm-text-dim"
+                          >
+                            lokal
                           </span>
                         )}
-                      </span>
-                      {!pane.persisted && (
-                        <span
-                          title="Pane ini hanya ada di tab ini dan hilang saat reload."
-                          className="shrink-0 text-bm-text-dim"
-                        >
-                          lokal
-                        </span>
-                      )}
-                    </div>
-                  }
-                >
-                  {/* Selecting a pane happens on mousedown of its body/header so
-                      that clicking into a terminal also focuses the pane. */}
-                  <div
-                    className="w-full h-full"
-                    onMouseDown={() => setActivePaneId(pane.id)}
+                      </div>
+                    }
                   >
-                    <PaneTerminalManager paneId={pane.id} />
-                  </div>
-                </Pane>
-              )
-            })}
-          </div>
+                    {/* Selecting a pane happens on mousedown of its body/header
+                        so that clicking into a terminal also focuses the pane. */}
+                    <div
+                      className="w-full h-full"
+                      onMouseDown={() => setActivePaneId(pane.id)}
+                    >
+                      <PaneTerminalManager paneId={pane.id} />
+                    </div>
+                  </Pane>
+                )
+              })}
+            </div>
+          </ShellLaunchProvider>
         )}
       </div>
 

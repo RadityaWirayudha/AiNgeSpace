@@ -11,6 +11,7 @@
 
 import { memo, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
+import { useShellLaunch } from "./shell-launch"
 import {
   attachInstance,
   detachInstance,
@@ -29,16 +30,25 @@ function TerminalPanelImpl({ isActive, terminalId, onFocus }: TerminalPanelProps
   // Held in a ref so a new callback identity from the parent cannot re-run the
   // attach effect and bounce the terminal through staging and back.
   const onFocusRef = useRef(onFocus)
+  // Same reasoning for the workspace's launch settings: a re-rendered provider
+  // must not re-run the attach effect. The ref starts out correct, so the very
+  // first attach — the one that actually spawns the shell — already sees them.
+  const launch = useShellLaunch()
+  const launchRef = useRef(launch)
 
   useEffect(() => {
     onFocusRef.current = onFocus
   }, [onFocus])
 
   useEffect(() => {
+    launchRef.current = launch
+  }, [launch])
+
+  useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
-    attachInstance(terminalId, el)
+    attachInstance(terminalId, el, launchRef.current.claim(terminalId))
     setFocusHandler(terminalId, () => onFocusRef.current())
 
     return () => {

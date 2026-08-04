@@ -3,8 +3,10 @@
 Lanjutan dari `buat-workspace-handoff-4.md`. File ini hanya membahas satu permintaan
 user dan tidak menambah cakupan apa pun di luar itu.
 
-**Status singkat: pekerjaan berhenti di tengah. `npm run typecheck` GAGAL dengan 2
-error.** Bagian §3 di bawah adalah hal pertama yang harus dikerjakan.
+**Status singkat: bagian (a), (b), dan (c) sudah selesai dan build bersih.**
+`npx tsc -p tsconfig.json --noEmit` tidak mengeluarkan apa pun, dan lint pada file-file
+yang disentuh hanya menyisakan satu error yang memang sudah ada sejak sebelum pekerjaan
+ini (lihat §3). Yang tersisa hanyalah verifikasi manual di aplikasi desktop.
 
 ---
 
@@ -133,87 +135,97 @@ Semua perubahan di bawah sudah masuk ke file:
 
 ---
 
-## 3. Yang BELUM dikerjakan — kerjakan ini lebih dulu
+## 3. Yang sudah diselesaikan setelah handoff ini ditulis
 
-### 3.1 Dua simbol yang dipakai tapi belum didefinisikan (build merah)
+### 3.1 Dua simbol yang hilang — SELESAI
+
+`applyPreset` dan `activePresetId` sekarang ada di `CreateWorkspaceDialog`, tepat sebelum
+`enterChildFolder`, persis sebentuk yang dijelaskan di versi sebelumnya file ini:
+`applyPreset` mengubah tepat tiga hal (`setPickedDir` + `setDirCommand("")`,
+`setLayoutId`, `setAgents` yang **mengganti** peta agen, bukan menggabungnya) lalu
+`setShowErrors(false)`; `activePresetId` membandingkan folder, layout, dan himpunan agen
+**persis sama**, bukan superset. `npx tsc -p tsconfig.json --noEmit` bersih.
+
+### 3.2 Command Opencode benar-benar dijalankan — SELESAI
+
+Rantai `cwd` + command sekarang tersambung dari workspace sampai ke PTY. Perubahannya:
+
+- **`src/features/terminal/shell-launch.tsx` (baru).** `ShellLaunchProvider` +
+  `useShellLaunch`. Context, bukan variabel global — alasannya ditulis ulang di kepala
+  file: efek anak jalan sebelum efek induk, jadi global akan kosong tepat pada terminal
+  pertama. Nilai context memegang peta penugasan yang bisa berubah; tidak ada yang
+  re-render karenanya.
+- **`src/features/terminal/terminal-instances.ts`.** `ShellLaunch { cwd?, startupCommand? }`
+  diekspor; `attachInstance(id, el, launch)` → `createInstance(id, launch)` →
+  `attachPty(inst, desktop, launch)`, yang meneruskan `cwd` ke `acquirePtySession` dan
+  menulis `command + "\r"` setelah `result.ok`. Argumen `launch` opsional (default `{}`),
+  jadi pemanggil lama tidak berubah perilakunya.
+  **Ada satu penjaga tambahan yang tidak ada di rancangan awal**: `const started =
+  new Set<string>()`. "Sekali per `createInstance`" ternyata belum cukup — kalau sebuah
+  pane dilepas lalu dipasang lagi dalam 500 ms grace window PTY, `acquirePtySession`
+  mengembalikan sesi yang **masih hidup** dan `result.ok` bernilai true lagi, sehingga
+  command akan diketikkan kedua kali ke shell yang sudah menjalankan agen. Set ini
+  sengaja tidak pernah dibersihkan, termasuk di `disposeInstance`.
+- **`src/features/terminal/TerminalPanel.tsx`.** Membaca context dan menyimpannya di ref
+  (pola yang sama dengan `onFocusRef`) supaya provider yang re-render tidak memicu ulang
+  efek attach. Deps efek tetap `[terminalId]`.
+- **`src/features/workspace/PurpSpaceLayout.tsx`.** `WorkspaceData.workingDir?` diisi dari
+  `row.working_dir` saat hidrasi dan dari `draft.workingDir` di `handleWorkspaceCreated`
+  (keduanya `.trim() || undefined`, karena string kosong bukan berarti "tidak ada
+  preferensi"). Grid pane dibungkus `ShellLaunchProvider`; providernya tidak menghasilkan
+  DOM sehingga layout grid tidak berubah.
+
+Rantai ke main process sudah diverifikasi ulang, bukan diasumsikan: `preload.ts:82`
+meneruskan `opts` apa adanya, `main.ts:96` memanggil `manager.create(id, opts ?? {})`, dan
+`pty-manager.ts:103` memvalidasi lewat `isDirectory()` yang mengembalikan `false` untuk
+`undefined` — jadi path workspace yang sudah dihapus akan turun ke folder default, bukan
+gagal spawn.
+
+Dua asumsi yang paling gampang salah juga sudah **dibuktikan dengan menjalankan PTY-nya**,
+bukan dibaca dari kode saja. `scripts/tmp/pty-startup-test.cjs` (jalankan dengan
+`npx electron scripts/tmp/pty-startup-test.cjs`) menspawn PowerShell dengan
+`cwd: "C:/Users/user/2026 3/PurpVoice"` lalu langsung menulis satu command tanpa delay
+sama sekali. Hasilnya:
 
 ```
-$ npx tsc -p tsconfig.json --noEmit
-src/components/CreateWorkspaceDialog.tsx(1484,33): error TS2304: Cannot find name 'activePresetId'.
-src/components/CreateWorkspaceDialog.tsx(1485,32): error TS2304: Cannot find name 'applyPreset'.
+PS C:\Users\user\2026 3\PurpVoice> Write-Output MARKER-OK
+MARKER-OK
+cwd landed: true
+command ran: true
 ```
 
-Keduanya sudah dioper ke `LayoutStep` tapi belum dibuat di dalam
-`CreateWorkspaceDialog`. Tempat yang wajar: dekat `pickRecent` (baris ~1236), setelah
-`resolvedWorkingDir` (baris ~1151) karena `activePresetId` membacanya.
+Jadi `cwd` benar sampai, dan menulis tanpa menunggu prompt **tidak** kehilangan input —
+pseudoconsole-nya menyangga stdin. Di stream mentahnya terlihat ConPTY sempat menggambar
+ulang baris input ("Write-Output MWrite-Output MARKE…"); itu repaint biasa saat shell baru
+naik, dan baris akhirnya utuh. Karena itu `attachPty` sengaja **tidak** memakai `setTimeout`
+sebelum menulis: timer hanya akan jadi terkaan soal berapa lama shell menyala.
 
-Bentuk yang dimaksud saat call site itu ditulis:
+**Pertanyaan produk yang tadinya terbuka, dan aturan yang dipilih.** Kalau satu workspace
+punya beberapa terminal, command dibagikan **satu agen per terminal, urut mount** (untuk
+tree pane yang baru, itu sama dengan urutan kiri-ke-kanan), dan tiap terminal mengingat
+jatahnya lewat `terminalId`. Terminal yang lebih banyak dari agen tidak menjalankan apa
+pun; agen yang lebih banyak dari terminal tidak jalan sama sekali. Aturan ini dipilih
+karena teks di `AgentsStep` sudah menjanjikannya ("Agen dimulai di panel terminal
+masing-masing saat workspace dibuka"), dan untuk preset PurpVoice sendiri (`l1` = 1
+terminal, 1 agen) hasilnya tidak ambigu. Kalau user mau aturan lain, satu-satunya tempat
+yang perlu diubah adalah `claim()` di `shell-launch.tsx`.
 
-- **`applyPreset(preset)`** — `useCallback`, mengubah tepat tiga hal dan tidak lebih:
-  `setPickedDir(preset.workingDir)` + `setDirCommand("")` (baris `cd` yang belum
-  dijalankan harus dibuang, kalau tidak ia akan memindahkan folder lagi saat blur
-  berikutnya — sama seperti `browseForFolder`), `setLayoutId(preset.layoutId)`,
-  `setAgents(Object.fromEntries(preset.agentIds.map((id) => [id, true])))`, lalu
-  `setShowErrors(false)`. Jangan tambahkan efek samping lain: komentar di atas `PRESETS`
-  menjanjikan bahwa hanya field-field itu yang dibaca.
-- **`activePresetId`** — `useMemo`, mengembalikan `p.id` bila `p.workingDir ===
-  resolvedWorkingDir` **dan** `p.layoutId === layoutId` **dan** himpunan agen aktif
-  (`AGENTS.filter((a) => agents[a.id]).map((a) => a.id)`) sama persis dengan
-  `p.agentIds` — bukan sekadar superset, supaya tile tidak menyala saat user sudah
-  menambah agen lain. Selain itu `null`. Deps: `resolvedWorkingDir`, `layoutId`, `agents`.
+### 3.3 Yang masih perlu dilakukan user (manual, tidak bisa diverifikasi dari sini)
 
-Setelah itu jalankan `npx tsc -p tsconfig.json --noEmit` (harus bersih) dan
-`npx eslint src/components/CreateWorkspaceDialog.tsx src/lib/workspace/agents.ts`.
-**Lint global bukan gate di repo ini** — ada ~320 pelanggaran
-`react-hooks/set-state-in-effect` yang sudah ada sebelumnya, termasuk
-`PurpSpaceLayout.tsx:296`, dan itu **tidak boleh** ikut "diperbaiki". Lint file yang
-disentuh saja.
+Jalankan `npm run dev:desktop`, buat workspace dari preset **PurpVoice**, lalu pastikan:
 
-### 3.2 Command Opencode belum benar-benar dijalankan
+1. Kotak folder terisi `C:\Users\user\2026 3\PurpVoice` dan tile presetnya menyala.
+2. Terminalnya terbuka **di folder itu** (`pwd` / prompt-nya).
+3. Baris `opencode --dangerously-skip-permissions` terketik sendiri dan opencode jalan
+   tanpa menanyakan izin.
+4. Tutup pane lalu buka workspace lain dan kembali — command **tidak** boleh terketik
+   dua kali.
 
-Ini bagian (c) yang belum tuntas dan **keputusannya ada di user**, bukan di agent.
-
-Keadaan sekarang: `agent_ids` (termasuk `"opencode"`) ditulis ke database, dibaca lagi
-ke `WorkspaceData.agentIds`, dan dihitung untuk footer pane — **tapi tidak ada satu
-jalur pun yang menjalankan command apa pun**, dan `cwd` tidak pernah sampai ke PTY.
-Jadi hari ini preset PurpVoice mengisi form dengan benar dan tersimpan dengan benar,
-tetapi terminalnya tetap membuka shell polos di folder default, bukan
-`opencode --dangerously-skip-permissions` di `C:\Users\user\2026 3\PurpVoice`.
-
-Bukti spesifik, jangan diriset ulang:
-
-- `src/features/terminal/terminal-instances.ts:290` — `attachPty` memanggil
-  `acquirePtySession(desktop, id, { cols, rows, onData, onExit })`, **tanpa `cwd`**.
-- `src/features/terminal/pty-session.ts:77` — `AcquireOptions` **sudah** punya
-  `cwd?: string` dan meneruskannya ke `bridge.terminal.create`.
-- `electron/pty-manager.ts:103` — main process **sudah** menghormati `cwd`.
-- `src/features/terminal/TerminalPanel.tsx:41` — satu-satunya pemanggil
-  `attachInstance(terminalId, el)`; tidak membawa konteks workspace sama sekali.
-- `src/features/workspace/PurpSpaceLayout.tsx:53` — `interface WorkspaceData` **tidak
-  punya** `workingDir`; hidrasi di baris ~208 dan `handleWorkspaceCreated` di baris ~340
-  keduanya tidak mengisinya.
-- Rantai render: `PurpSpaceLayout:693` → `PaneTerminalManager({paneId})` →
-  `TerminalNode` → `TerminalLeafView` → `TerminalPanel` — tidak ada satu pun yang
-  mengetahui folder kerja workspace.
-
-Rancangan yang sudah disiapkan (tinggal dieksekusi kalau user setuju): tambah
-`workingDir` ke `WorkspaceData`, sediakan React **context** berisi
-`{ cwd, startupCommands: startupCommandsFor(ws.agentIds) }` di sekitar grid pane,
-konsumsi di `TerminalPanel` lewat ref, dan oper sebagai argumen ketiga
-`attachInstance(terminalId, el, launch)` → `createInstance(id, launch)` → `attachPty`,
-yang meneruskan `cwd` ke `acquirePtySession` dan menulis tiap command + `"\r"` setelah
-`result.ok`. Karena `createInstance` hanya jalan sekali per `terminalId`, command jalan
-sekali per terminal tanpa flag tambahan.
-
-**Wajib pakai context, bukan variabel global "cwd saat ini" di level modul** — efek anak
-mount sebelum efek induk, jadi global akan terbaca kosong pada terminal pertama.
-
-Handoff 4 §4 menandai perubahan ini sebagai "harus tanya user dulu" karena menyentuh
-inti terminal. Ada satu pertanyaan produk yang belum terjawab dan harus ditanyakan
-sekalian: **kalau satu workspace punya beberapa terminal, apakah command agen jalan di
-semua terminal atau hanya di terminal pertama?** Untuk preset PurpVoice sendiri hal ini
-tidak terasa (layout `l1` = 1 terminal, 1 agen), jadi bagian (c) bisa dianggap selesai
-untuk kasus user tanpa menjawabnya — tapi jangan diputuskan sendiri untuk kasus umum.
+Catatan lint yang masih berlaku: **lint global bukan gate di repo ini** — ada ~320
+pelanggaran `react-hooks/set-state-in-effect` yang sudah ada sebelumnya. Satu-satunya
+error yang tersisa pada file-file di atas adalah `PurpSpaceLayout.tsx:306` (`void
+loadPanes(...)` di dalam efek), yang di HEAD ada di baris 296 dan **tidak boleh**
+"diperbaiki" sebagai bagian dari pekerjaan ini.
 
 ---
 

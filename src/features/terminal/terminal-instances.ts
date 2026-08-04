@@ -87,6 +87,32 @@ const instances = new Map<string, Instance>()
 /** Reverse lookup for the shared ResizeObserver, which reports elements. */
 const containerToId = new WeakMap<Element, string>()
 
+/**
+ * Terminals whose startup command has already been sent.
+ *
+ * Keyed by `terminalId` and deliberately never cleaned up, not even in
+ * `disposeInstance`. A dispose followed by a re-attach inside the PTY's 500 ms
+ * grace window (switch workspace away and straight back) rebuilds the `Instance`
+ * against the *same live shell* — `acquirePtySession` hands back the existing
+ * session — so a per-instance flag would type the command a second time into a
+ * shell already running the agent. The set is bounded by how many terminals the
+ * user opens in one session, which is a handful of strings.
+ */
+const started = new Set<string>()
+
+/**
+ * How a terminal's shell should come up. Read only when the shell is actually
+ * spawned, which is once per `terminalId`.
+ */
+export interface ShellLaunch {
+  /** Absolute folder. Ignored by the main process if it is not a directory, so a
+   *  stale workspace path degrades to the default rather than failing to spawn. */
+  cwd?: string
+  /** Typed in, followed by Enter, once the shell answers. Null means nothing to
+   *  run — the overwhelmingly common case. */
+  startupCommand?: string | null
+}
+
 let staging: HTMLDivElement | null = null
 let observer: ResizeObserver | null = null
 let webglContexts = 0
@@ -282,7 +308,11 @@ function writeBanner(term: Terminal, terminalId: string, live: boolean) {
  * history, arrow keys, tab completion and Ctrl+C, and a second parser on top of
  * it would fight the shell.
  */
-function attachPty(inst: Instance, desktop: DesktopBridge): () => void {
+function attachPty(
+  inst: Instance,
+  desktop: DesktopBridge,
+  launch: ShellLaunch
+): () => void {
   const { term, id } = inst
   let disposed = false
   const input = term.onData((data) => desktop.terminal.write(id, data))
@@ -290,6 +320,7 @@ function attachPty(inst: Instance, desktop: DesktopBridge): () => void {
   void acquirePtySession(desktop, id, {
     cols: term.cols,
     rows: term.rows,
+    cwd: launch.cwd,
     onData: (data) => {
       if (!disposed) term.write(data)
     },
@@ -311,6 +342,17 @@ function attachPty(inst: Instance, desktop: DesktopBridge): () => void {
       inst.lastCols = term.cols
       inst.lastRows = term.rows
       sendPtyResize(inst)
+
+      // Start the agent, at most once per terminal, ever. See `started`.
+      const cmd = launch.startupCommand
+      if (cmd && !started.has(id)) {
+        started.add(id)
+        // No delay before this write: the pseudoconsole buffers stdin, so the
+        // shell reads the line whenever it finishes starting up. A timer would
+        // only be a guess at how long that takes, and would type into whatever
+        // was on screen if the guess ran short.
+        desktop.terminal.write(id, `${cmd}\r`)
+      }
     })
     .catch((err: unknown) => {
       if (disposed) return
@@ -445,7 +487,7 @@ function attachMockShell(term: Terminal): () => void {
    LIFECYCLE
 -------------------------------------------------------------------*/
 
-function createInstance(id: string): Instance {
+function createInstance(id: string, launch: ShellLaunch): Instance {
   const parent = stagingNode()
   const host = document.createElement("div")
   host.className = "w-full h-full"
@@ -527,21 +569,31 @@ function createInstance(id: string): Instance {
   term.textarea?.addEventListener("focus", () => inst.onFocus?.())
 
   writeBanner(term, id, Boolean(desktop))
-  inst.detachShell = desktop ? attachPty(inst, desktop) : attachMockShell(term)
+  inst.detachShell = desktop ? attachPty(inst, desktop, launch) : attachMockShell(term)
 
   instances.set(id, inst)
   return inst
 }
 
-export function ensureInstance(terminalId: string): void {
+export function ensureInstance(terminalId: string, launch: ShellLaunch = {}): void {
   if (typeof document === "undefined") return
-  if (!instances.has(terminalId)) createInstance(terminalId)
+  if (!instances.has(terminalId)) createInstance(terminalId, launch)
 }
 
-/** Moves the terminal into a React slot. Creates it on first use. */
-export function attachInstance(terminalId: string, container: HTMLElement): void {
+/**
+ * Moves the terminal into a React slot. Creates it on first use.
+ *
+ * `launch` is read only on that first use, because that is the only moment a
+ * shell is spawned — a terminal that is already running keeps the folder and the
+ * agent it started with, which is what someone who reopens a pane expects.
+ */
+export function attachInstance(
+  terminalId: string,
+  container: HTMLElement,
+  launch: ShellLaunch = {}
+): void {
   if (typeof document === "undefined") return
-  const inst = instances.get(terminalId) ?? createInstance(terminalId)
+  const inst = instances.get(terminalId) ?? createInstance(terminalId, launch)
 
   if (inst.container && inst.container !== container) {
     ensureObserver().unobserve(inst.container)

@@ -1240,6 +1240,50 @@ export function CreateWorkspaceDialog({
     setShowErrors(false)
   }, [])
 
+  /**
+   * A preset writes the whole draft at once: folder, layout, agents.
+   *
+   * `setDirCommand("")` is not tidiness — a half-typed `cd` left at the prompt
+   * would still be pending and would move the folder again on the next blur,
+   * quietly undoing the preset. `browseForFolder` clears it for the same reason.
+   *
+   * The agent map is replaced rather than merged. Merging would leave whatever
+   * was ticked before switched on next to the preset's own agents, so clicking
+   * "PurpVoice" would launch Opencode *and* Frontline — a preset has to mean one
+   * thing.
+   */
+  const applyPreset = useCallback((preset: (typeof PRESETS)[number]) => {
+    setPickedDir(preset.workingDir)
+    setDirCommand("")
+    setLayoutId(preset.layoutId)
+    setAgents(Object.fromEntries(preset.agentIds.map((id) => [id, true])))
+    setShowErrors(false)
+  }, [])
+
+  /**
+   * Which preset the draft currently *is*, or null.
+   *
+   * Compared on all three fields, and on the agent set exactly rather than as a
+   * subset: ticking an extra agent on step 3 means this is no longer that preset,
+   * and a tile that stayed lit would be claiming otherwise.
+   */
+  const activePresetId = useMemo(() => {
+    const enabled = AGENTS.filter((a) => agents[a.id])
+      .map((a) => a.id)
+      .sort()
+    const match = PRESETS.find((p) => {
+      if (p.workingDir !== resolvedWorkingDir || p.layoutId !== layoutId) {
+        return false
+      }
+      const wanted = [...p.agentIds].sort()
+      return (
+        wanted.length === enabled.length &&
+        wanted.every((id, i) => id === enabled[i])
+      )
+    })
+    return match?.id ?? null
+  }, [resolvedWorkingDir, layoutId, agents])
+
   /** Clicking a name in the guidance list. Same move as typing `cd <name>`, but
    *  against the folder that exists rather than the one that does not. */
   const enterChildFolder = useCallback(
