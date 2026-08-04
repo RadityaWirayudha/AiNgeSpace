@@ -372,6 +372,58 @@ di-rename `*_aingespace` → `*_purpspace`.
 Editor, setiap query akan 500 `relation does not exist`. Blok verifikasi ada di
 kaki berkas migrasinya.
 
+**Status: 003 SUDAH dijalankan user (4 Agu 2026).** Keempat tabel `*_purpspace`
+merespons 200 lewat service role, dan tiga nama constraint terbukti ikut
+ter-rename (dibuktikan dengan sengaja melanggarnya lalu membaca pesan error —
+lihat `scripts/tmp/verify-rename.mjs`).
+
+### 10.3b Database — `004_workspaces_working_dir.sql` (sudah dijalankan)
+
+Menjalankan 003 memunculkan masalah yang selama ini tertutup nama tabel:
+**`workspaces_purpspace` masih berbentuk kolom lama.**
+
+```
+live : id, clerk_user_id, name, github_repo, github_branch, local_path,
+       layout_preset, agent_ids, sort_order, created_at, updated_at
+kode : id, clerk_user_id, name, working_dir,
+       layout_preset, agent_ids, sort_order, created_at, updated_at
+```
+
+Sebabnya: 002 pernah dijalankan, tapi **versi 002 sebelum commit `a5d3c48`** —
+versi yang masih memakai `github_repo`/`github_branch`/`local_path`. Setelah itu
+002 diedit di repo, dan berkas yang sudah pernah dijalankan tidak pernah
+dijalankan ulang (memang tidak boleh: 002 diawali `drop table … cascade`).
+Akibatnya `POST /api/workspaces` gagal dengan `PGRST204 "Could not find the
+'working_dir' column"`, bukan lagi `relation does not exist`.
+
+Tiga tabel lain (`panes_`, `github_connections_`, `env_vars_`) **cocok persis**
+dengan `src/types/database.ts`, jadi 004 hanya menyentuh `workspaces_purpspace`:
+
+- `local_path` **di-rename** menjadi `working_dir` (bukan add+drop) supaya isinya
+  ikut terbawa, lalu di-`set not null` setelah backfill.
+- `github_repo` dan `github_branch` **dibuang** — ini satu-satunya bagian yang
+  merusak, dan memang itu tujuan `a5d3c48`/`e3f9727`/`a393ca6`. Tidak ada satu
+  baris pun di `src/` yang masih menyebut ketiga kolom lama (dicek dengan grep).
+- **Pengaman:** kalau tabel ternyata berisi baris, 004 berhenti dengan
+  `raise exception` alih-alih membuang kolom diam-diam. Saat ditulis isinya 0
+  baris, jadi jalur itu tidak tersentuh.
+- Constraint `workspaces_aingespace_repo_format` dan
+  `..._branch_not_blank` **tidak ikut ter-rename oleh 003** (nama barunya memang
+  tidak ada di daftar 003, karena 002 versi repo sudah tidak memilikinya). 004
+  membuangnya dengan kedua kemungkinan nama.
+- Diakhiri `notify pgrst, 'reload schema'` — tanpa itu PostgREST bisa tetap
+  menjawab `PGRST204` dari cache skema lamanya.
+
+**Status: 004 SUDAH dijalankan user (4 Agu 2026), dan hasilnya diuji hidup.**
+`workspaces_purpspace` kini persis sama dengan `src/types/database.ts`
+(`working_dir text not null`; `github_repo`/`github_branch`/`local_path` hilang),
+keenam nama constraint terbukti `*_purpspace`, dan `scripts/tmp/roundtrip.mjs`
+menjalankan alur nyata dari ujung ke ujung — insert workspace → insert pane
+lewat FK → `tree` jsonb kembali sebagai objek → trigger `set_updated_at`
+menaikkan stempel waktu → list per `clerk_user_id` (jalur sidebar) → delete
+workspace dan pane-nya ikut terhapus lewat cascade. Semua hijau, baris ujinya
+dibersihkan sendiri, keempat tabel kembali ke count 0.
+
 ### 10.4 Jalur upgrade yang harus user tahu
 
 - **`appId` berubah** `com.bridgemind.aingespace` → `com.purpspace.app`. Windows
@@ -405,5 +457,19 @@ nama berkas di disk.
 - `node scripts/make-icon.mjs 512` → `build/icon.png` 512×512, terverifikasi
   secara visual cocok dengan artwork sumber.
 
-**Belum dijalankan:** migrasi 003 di Supabase, dan `npm run electron:dev` untuk
-memeriksa mark di sidebar/menu bar secara langsung.
+- **003 dijalankan user di Supabase (4 Agu 2026)** → keempat tabel `*_purpspace`
+  status 200, count 0. Bentuk kolom nyata dibaca ulang dari spec PostgREST
+  (`node scripts/tmp/cols.mjs`), dan dari situlah ketidakcocokan `working_dir`
+  di §10.3b ketahuan.
+
+- **004 dijalankan user (4 Agu 2026)** → skema cocok dengan kode, dan
+  `node scripts/tmp/roundtrip.mjs` menembus seluruh alur nyata (insert → FK →
+  jsonb → trigger → list → cascade delete) dengan 7/7 hijau. Lihat §10.3b.
+
+Empat skrip pemeriksa ada di `scripts/tmp/`, aman dijalankan ulang kapan saja:
+`probe.mjs` (tabel ada + jumlah baris), `cols.mjs` (bentuk kolom nyata dari spec
+PostgREST), `verify-rename.mjs` (nama constraint, dibuktikan dengan sengaja
+melanggarnya), `roundtrip.mjs` (alur penuh, membersihkan baris ujinya sendiri).
+
+**Belum dijalankan:** `npm run electron:dev` untuk memeriksa mark di sidebar dan
+menu bar secara langsung, serta langkah manual §7.2 (4, 9, 10).
