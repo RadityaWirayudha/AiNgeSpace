@@ -123,23 +123,29 @@ const LAYOUTS = LAYOUT_PRESETS
 
 /**
  * A preset is a whole draft in one click: the folder, the layout, and the agents.
- * Every field here is read when the tile is clicked — `applyPreset` sets exactly
- * these three things and nothing else, so adding a field means wiring it there
- * too rather than leaving it as decoration.
+ *
+ * Clicking a tile does not fill the form and wait — it creates the workspace and
+ * closes the dialog, skipping step 3 entirely. That is the whole point of a
+ * preset: every answer the remaining steps would ask for is already here. The
+ * form is still written first, so a folder that turns out to be missing leaves
+ * the user on step 2 looking at the preset's own values and the usual reason.
+ *
+ * Every field is read on that click. Adding one means wiring it into
+ * `applyPreset` and `launchPreset` too, rather than leaving it as decoration.
  *
  * `workingDir` is an absolute path on the machine this build runs on. The tile
- * still probes the folder like any other choice, so a preset pointing at a folder
- * that has been moved or deleted is refused at the footer with the usual reason
- * instead of creating a workspace whose terminals start somewhere else.
+ * probes the folder like any other choice, so a preset pointing at a folder that
+ * has been moved or deleted is refused instead of creating a workspace whose
+ * terminals start somewhere else.
  */
 const PRESETS = [
   {
     id: "purpvoice",
     name: "PurpVoice",
     icon: Mic,
-    desc: "Opencode di folder PurpVoice, izin otomatis.",
+    desc: "Empat terminal Opencode di folder PurpVoice, izin otomatis.",
     workingDir: "C:\\Users\\user\\2026 3\\PurpVoice",
-    layoutId: "l1",
+    layoutId: "l4",
     agentIds: ["opencode"],
   },
 ] as const
@@ -741,16 +747,17 @@ function LayoutStep({
   recent,
   recentStatus,
   onPickRecent,
-  activePresetId,
-  onApplyPreset,
+  pendingPresetId,
+  onLaunchPreset,
 }: {
   layoutId: string
   setLayoutId: (v: string) => void
   recent: WorkspaceRow[]
   recentStatus: RecentStatus
   onPickRecent: (row: WorkspaceRow) => void
-  activePresetId: string | null
-  onApplyPreset: (preset: (typeof PRESETS)[number]) => void
+  /** The preset currently being opened, if any. Null means idle. */
+  pendingPresetId: string | null
+  onLaunchPreset: (preset: (typeof PRESETS)[number]) => Promise<void>
 }) {
   const active = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
 
@@ -822,12 +829,13 @@ function LayoutStep({
           </Badge>
         </div>
         <p className="text-[11px] text-zinc-500 mb-3">
-          Folder, layout, dan agen dalam satu klik.
+          Sekali klik langsung membuka workspace — folder, layout, dan agennya
+          sudah ditentukan, jadi langkah berikutnya dilewati.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PRESETS.map((p) => {
             const Icon = p.icon
-            const on = p.id === activePresetId
+            const busy = p.id === pendingPresetId
             const agentNames = p.agentIds
               .map((id) => AGENTS.find((a) => a.id === id)?.name ?? id)
               .join(" · ")
@@ -835,26 +843,29 @@ function LayoutStep({
               <button
                 key={p.id}
                 type="button"
-                aria-pressed={on}
-                onClick={() => onApplyPreset(p)}
+                // An action, not a choice: no `aria-pressed`, because nothing
+                // stays selected afterwards — the dialog is gone.
+                onClick={() => void onLaunchPreset(p)}
+                disabled={pendingPresetId !== null}
                 title={p.workingDir}
                 className={cn(
-                  "text-left flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
-                  on
-                    ? "bg-purple/10 border-purple"
-                    : "bg-secondary border-border hover:border-zinc-500"
+                  "text-left flex flex-col gap-2 p-3 rounded-lg border transition-colors",
+                  busy
+                    ? "bg-purple/10 border-purple cursor-wait"
+                    : "bg-secondary border-border hover:border-zinc-500 cursor-pointer",
+                  pendingPresetId !== null && !busy && "opacity-50 cursor-not-allowed"
                 )}
               >
                 <span
                   className={cn(
                     "size-6 rounded-md flex items-center justify-center",
-                    on ? "bg-purple" : "bg-zinc-800"
+                    busy ? "bg-purple" : "bg-zinc-800"
                   )}
                 >
                   <Icon
                     className={cn(
                       "size-3.5",
-                      on ? "text-[#0E0E10]" : "text-zinc-400"
+                      busy ? "text-[#0E0E10]" : "text-zinc-400"
                     )}
                     strokeWidth={1.9}
                   />
@@ -864,14 +875,17 @@ function LayoutStep({
                     {p.name}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-0.5">{p.desc}</div>
-                  {/* The two things the click actually changes, spelled out —
-                      a preset that silently moved the working folder somewhere
-                      else would be a nasty surprise three steps later. */}
+                  {/* What the click actually does, spelled out — a preset that
+                      silently opened somewhere else, or with more terminals than
+                      expected, would be a nasty surprise once it is too late to
+                      go back. */}
                   <div className="text-[10px] text-zinc-600 font-mono mt-1.5 truncate">
                     {compactPath(p.workingDir)}
                   </div>
                   <div className="text-[10px] text-zinc-600 truncate">
-                    {terminalCountFor(p.layoutId)} terminal · {agentNames}
+                    {busy
+                      ? "Membuka…"
+                      : `${terminalCountFor(p.layoutId)} terminal · ${agentNames}`}
                   </div>
                 </div>
               </button>
@@ -1018,6 +1032,10 @@ export function CreateWorkspaceDialog({
    *  `submitting` because nothing has been created yet — it only stops a second
    *  click from starting a second workspace behind the first one's check. */
   const [checking, setChecking] = useState(false)
+  /** The preset tile whose click is still running. Non-null disables every tile
+   *  — the tiles sit above the footer and never consulted `submitting`, so two
+   *  quick clicks would have posted two workspaces. */
+  const [pendingPresetId, setPendingPresetId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -1041,6 +1059,7 @@ export function CreateWorkspaceDialog({
     setAgents({ a1: true })
     setSubmitting(false)
     setChecking(false)
+    setPendingPresetId(null)
     setSubmitError(null)
     // `recent` is deliberately left alone: the effect below refetches it on the
     // next open, and clearing it here would only make the section flicker.
@@ -1243,6 +1262,11 @@ export function CreateWorkspaceDialog({
   /**
    * A preset writes the whole draft at once: folder, layout, agents.
    *
+   * Called by `launchPreset` before it creates anything. The launch itself does
+   * not read this back — it carries the preset's values directly — but the draft
+   * has to end up matching, because a failed folder check leaves the user
+   * looking at this form.
+   *
    * `setDirCommand("")` is not tidiness — a half-typed `cd` left at the prompt
    * would still be pending and would move the folder again on the next blur,
    * quietly undoing the preset. `browseForFolder` clears it for the same reason.
@@ -1259,30 +1283,6 @@ export function CreateWorkspaceDialog({
     setAgents(Object.fromEntries(preset.agentIds.map((id) => [id, true])))
     setShowErrors(false)
   }, [])
-
-  /**
-   * Which preset the draft currently *is*, or null.
-   *
-   * Compared on all three fields, and on the agent set exactly rather than as a
-   * subset: ticking an extra agent on step 3 means this is no longer that preset,
-   * and a tile that stayed lit would be claiming otherwise.
-   */
-  const activePresetId = useMemo(() => {
-    const enabled = AGENTS.filter((a) => agents[a.id])
-      .map((a) => a.id)
-      .sort()
-    const match = PRESETS.find((p) => {
-      if (p.workingDir !== resolvedWorkingDir || p.layoutId !== layoutId) {
-        return false
-      }
-      const wanted = [...p.agentIds].sort()
-      return (
-        wanted.length === enabled.length &&
-        wanted.every((id, i) => id === enabled[i])
-      )
-    })
-    return match?.id ?? null
-  }, [resolvedWorkingDir, layoutId, agents])
 
   /** Clicking a name in the guidance list. Same move as typing `cd <name>`, but
    *  against the folder that exists rather than the one that does not. */
@@ -1337,8 +1337,12 @@ export function CreateWorkspaceDialog({
    * Uses the debounced probe when it is already about this exact path, and asks
    * outright when it is not — the click must not depend on a timer having fired.
    */
-  const ensureFolderExists = async (): Promise<boolean> => {
-    const target = resolvedWorkingDir
+  const ensureFolderExists = async (
+    /** Explicit when the click already knows the folder. A preset sets state and
+     *  checks in the same handler, and `resolvedWorkingDir` would still be the
+     *  old value — React has not re-rendered yet. */
+    target: string = resolvedWorkingDir
+  ): Promise<boolean> => {
     if (!target) return false
 
     const bridge = window.purpspace
@@ -1363,15 +1367,32 @@ export function CreateWorkspaceDialog({
     }
   }
 
-  /** `agentOverride` serves "Buka tanpa AI", which creates the workspace now
-   *  with no agents instead of walking through step 3. */
-  const handleLaunch = async (agentOverride?: string[]) => {
+  /**
+   * Everything the POST needs, gathered in one place.
+   *
+   * Passed explicitly rather than read from state inside `handleLaunch`, because
+   * two callers know their values before React does: "Buka tanpa AI" (no agents,
+   * whatever is ticked) and a preset tile (its own folder, layout and agents,
+   * set microseconds earlier in the same handler).
+   */
+  interface LaunchSpec {
+    workingDir: string
+    layoutId: string
+    agentIds: string[]
+  }
+
+  const draftSpec = (): LaunchSpec => ({
+    workingDir: resolvedWorkingDir,
+    layoutId,
+    agentIds: AGENTS.filter((a) => agents[a.id]).map((a) => a.id),
+  })
+
+  const handleLaunch = async (spec: LaunchSpec = draftSpec()) => {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const terminalCount = terminalCountFor(layoutId)
-      const agentIds =
-        agentOverride ?? AGENTS.filter((a) => agents[a.id]).map((a) => a.id)
+      const terminalCount = terminalCountFor(spec.layoutId)
+      const { workingDir, agentIds } = spec
 
       let workspaceId: string | null = null
       // The name is the server's to decide: it is the only side that can see
@@ -1383,11 +1404,11 @@ export function CreateWorkspaceDialog({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            workingDir: resolvedWorkingDir,
+            workingDir,
             // The layout and the agent selection used to stop here: the layout
             // was smuggled through localStorage and the agents were dropped
             // entirely, so reopening a workspace lost both.
-            layoutPreset: layoutId,
+            layoutPreset: spec.layoutId,
             agentIds,
           }),
         })
@@ -1417,8 +1438,8 @@ export function CreateWorkspaceDialog({
       onCreated?.({
         id: workspaceId,
         name: name ?? "Workspace",
-        workingDir: resolvedWorkingDir,
-        layoutId,
+        workingDir,
+        layoutId: spec.layoutId,
         terminalCount,
         agentIds,
         agentCount: agentIds.length,
@@ -1449,7 +1470,38 @@ export function CreateWorkspaceDialog({
       setStep(2)
       return
     }
-    await handleLaunch([])
+    await handleLaunch({ ...draftSpec(), agentIds: [] })
+  }
+
+  /**
+   * A preset tile: fill the draft, check the folder, create, close.
+   *
+   * The form is written first even though the launch does not read it back. If
+   * the folder is missing, the dialog stays open on step 2 showing the preset's
+   * own folder and the usual explanation — the user can fix it from there rather
+   * than being told "no" about values they cannot see.
+   *
+   * `pendingPresetId` is what stops a second click landing while the POST is in
+   * flight; `submitting` alone would not, because the tiles sit above the footer
+   * and never consulted it.
+   */
+  const launchPreset = async (preset: (typeof PRESETS)[number]) => {
+    if (pendingPresetId) return
+    applyPreset(preset)
+    setPendingPresetId(preset.id)
+    try {
+      if (!(await ensureFolderExists(preset.workingDir))) {
+        setShowErrors(true)
+        return
+      }
+      await handleLaunch({
+        workingDir: preset.workingDir,
+        layoutId: preset.layoutId,
+        agentIds: [...preset.agentIds],
+      })
+    } finally {
+      setPendingPresetId(null)
+    }
   }
 
   if (!open) return null
