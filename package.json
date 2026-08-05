@@ -1,0 +1,13 @@
+{
+  "name": "aingespace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dua proyek: purpspace-electron (aplikasi desktop) dan purpspace-webapp (website).",
+  "scripts": {
+    "dev": "cd purpspace-webapp && npm run dev",
+    "dev:desktop": "cd purpspace-electron && npm run dev:desktop",
+    "build": "cd purpspace-webapp && npm run build",
+    "build:desktop": "cd purpspace-electron && npm run build:desktop",
+    "install:all": "cd purpspace-electron && npm install && cd ../purpspace-webapp && npm install"
+  }
+}

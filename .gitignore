@@ -1,8 +1,14 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+#
+# Patterns here are deliberately NOT anchored with a leading slash: the repo now
+# holds two projects side by side (purpspace-electron/, purpspace-webapp/), and
+# an anchored pattern like `/node_modules` would only ever match the root — the
+# copies one level down would get committed. Anything that belongs to exactly one
+# project lives in that project's own .gitignore instead.
 
 # dependencies
-/node_modules
-/.pnp
+node_modules
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -11,24 +17,11 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage
 
 # next.js
-/.next/
-/out/
-
-# production
-# `/build/*` rather than `/build`: git does not descend into an excluded
-# directory, so a `!` exception inside one is never reached.
-/build/*
-# The app icon is a source asset — electron-builder reads it from
-# buildResources, so a fresh clone without it fails `npm run build:desktop`.
-# Regenerate with `node scripts/make-icon.mjs`.
-!/build/icon.png
-
-# desktop build output
-/dist
-/dist-electron
+.next/
+out/
 
 # misc
 .DS_Store
@@ -36,7 +29,7 @@
 
 # Windows reserved device name, created accidentally by `2>nul` redirects in
 # Git Bash. Turbopack crashes trying to read it (os error 1).
-/nul
+nul
 
 # debug
 npm-debug.log*
