@@ -1,7 +1,10 @@
 /**
  * Label + input, dipasangkan lewat `useId()` supaya mengklik labelnya benar-benar
- * memfokuskan inputnya — di form pembayaran yang isinya delapan kotak, itu
- * bedanya cukup terasa.
+ * memfokuskan inputnya.
+ *
+ * Pernah ada `SelectField` di sini juga, dipakai dropdown negara di form kartu.
+ * Form kartunya dibuang bareng `PaymentStep`, jadi komponennya ikut dibuang —
+ * bukan disimpan "siapa tahu nanti kepakai".
  */
 "use client"
 
@@ -32,28 +35,6 @@ export function Field({
       </label>
       <input id={id} className={CONTROL} {...props} />
       {hint && <p className="text-[11px] text-[var(--bm-text-dim)]">{hint}</p>}
-    </div>
-  )
-}
-
-export function SelectField({
-  label,
-  className,
-  children,
-  ...props
-}: ComponentProps<"select"> & { label: string }) {
-  const id = useId()
-  return (
-    <div className={cn("space-y-1.5", className)}>
-      <label
-        htmlFor={id}
-        className="block text-xs font-medium text-[var(--bm-text-secondary)]"
-      >
-        {label}
-      </label>
-      <select id={id} className={cn(CONTROL, "pr-8")} {...props}>
-        {children}
-      </select>
     </div>
   )
 }

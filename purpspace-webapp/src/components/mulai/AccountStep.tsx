@@ -1,11 +1,14 @@
 /**
  * Langkah 1 — referensi image #2.
  *
- * Frontend dulu: submit-nya cuma memanggil `onNext()`. Tidak ada request, tidak
- * ada penyimpanan, tidak ada akun yang benar-benar dibuat. Validasi HTML dasar
- * (`required`, `type="email"`, `minLength`) tetap dipasang supaya alurnya terasa
- * hidup waktu dites — dan pencocokan password dicek di sini karena tidak ada
- * atribut HTML yang bisa melakukannya.
+ * Tetap tanpa request: isinya cuma dinaikkan ke `TrialFlow`, yang mengirimnya
+ * bersama pilihan paket di langkah 2. Alasannya ada di komentar `TrialFlow`.
+ *
+ * Yang diperiksa di sini hanya yang bisa diperiksa tanpa server: pencocokan
+ * konfirmasi password (tidak ada atribut HTML yang bisa melakukannya) dan
+ * centang S&K. Aturan password yang sebenarnya — panjang, kekuatan, apakah
+ * pernah bocor — milik Clerk, dan jawabannya baru datang di langkah 2. Itu
+ * yang masuk lewat `serverError`.
  */
 "use client"
 
@@ -15,18 +18,46 @@ import { Button } from "@/components/ui/button"
 import { Field } from "@/components/ui/field"
 import { TRIAL_DAYS } from "@/content/plans"
 
-export function AccountStep({ onNext }: { onNext: () => void }) {
+export interface DataAkun {
+  email: string
+  password: string
+  /** Centang S&K. Diperiksa ulang di server — atribut `required` bisa dilewati. */
+  setuju: true
+}
+
+export function AccountStep({
+  defaultEmail = "",
+  serverError = null,
+  onNext,
+}: {
+  /** Diisi kembali kalau user dilempar balik ke sini dari langkah 2. */
+  defaultEmail?: string
+  /** Pesan dari `/api/daftar` yang menyangkut field email. */
+  serverError?: string | null
+  onNext: (data: DataAkun) => void
+}) {
   const [error, setError] = useState<string | null>(null)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    if (form.get("password") !== form.get("konfirmasi")) {
+
+    const password = String(form.get("password") ?? "")
+    if (password !== form.get("konfirmasi")) {
       setError("Konfirmasi password belum sama.")
       return
     }
+    if (form.get("setuju") !== "on") {
+      setError("Kamu perlu menyetujui Syarat & Ketentuan dulu.")
+      return
+    }
+
     setError(null)
-    onNext()
+    onNext({
+      email: String(form.get("email") ?? "").trim(),
+      password,
+      setuju: true,
+    })
   }
 
   return (
@@ -38,7 +69,7 @@ export function AccountStep({ onNext }: { onNext: () => void }) {
         Mulai paketmu
       </h1>
       <p className="mt-2 text-center text-[13px] text-[var(--bm-text-secondary)]">
-        Kartu kredit diperlukan. Sudah termasuk free trial {TRIAL_DAYS} hari.
+        Free trial {TRIAL_DAYS} hari. Tanpa kartu kredit.
       </p>
 
       <div className="mt-8 space-y-4">
@@ -48,6 +79,13 @@ export function AccountStep({ onNext }: { onNext: () => void }) {
           type="email"
           autoComplete="email"
           placeholder="kamu@contoh.com"
+          defaultValue={defaultEmail}
+          aria-invalid={serverError ? true : undefined}
+          hint={
+            serverError && (
+              <span className="text-[var(--destructive)]">{serverError}</span>
+            )
+          }
           required
         />
         <Field
@@ -89,7 +127,7 @@ export function AccountStep({ onNext }: { onNext: () => void }) {
       )}
 
       <Button type="submit" size="lg" className="mt-7 w-full">
-        Buat akun
+        Lanjutkan
       </Button>
     </form>
   )
