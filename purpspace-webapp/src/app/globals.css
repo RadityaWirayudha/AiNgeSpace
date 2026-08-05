@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Palet warna disalin dari `purpspace-electron/src/app/globals.css`.
+   File itu sumber kebenarannya — bukan `referensi.md`, yang tabel
+   warnanya sudah basi (di sana aksen aktif masih oranye #E0813C).
+
+   Yang sengaja TIDAK ikut disalin:
+     - `html { @apply font-mono }`. Di app desktop seluruh UI-nya mono
+       karena isinya terminal; di website marketing itu bikin paragraf
+       susah dibaca, jadi mono cuma dipakai untuk potongan command.
+     - Semua kelas `.bm-*` (pane, sash, row, chip, ...). Itu chrome
+       khusus grid terminal, tidak ada padanannya di sini.
+-------------------------------------------------------------------*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+
+  /* Brand — chrome only (logo, primary action, focus). Never status. */
+  --color-purple: #9333ea;
+  --color-purple-light: #a855f7;
+  --color-purple-dark: #7e22ce;
+  --color-violet: #8b5cf6;
+
+  /* Surfaces */
+  --color-bm-bg: #0e0e10;
+  --color-bm-pane: #161618;
+  --color-bm-pane-header: #1c1c1f;
+  --color-bm-border: #2a2a2e;
+  --color-bm-terminal: #09090b;
+
+  /* Text */
+  --color-bm-text: #e8e8ea;
+  --color-bm-text-secondary: #8a8a90;
+  --color-bm-text-dim: #62626a;
+
+  --color-bm-live: #a855f7;
+  --color-bm-link: #6ea8fe;
+  --color-bm-warning: #e0c34c;
+  --color-bm-select: #3ecf8e;
+}
+
+:root {
+  --background: #0e0e10;
+  --foreground: #e8e8ea;
+  --card: #161618;
+  --card-foreground: #e8e8ea;
+  --popover: #1c1c1f;
+  --popover-foreground: #e8e8ea;
+  --primary: #9333ea;
+  --primary-foreground: #fafafa;
+  --secondary: #1c1c1f;
+  --secondary-foreground: #e8e8ea;
+  --muted: #1c1c1f;
+  --muted-foreground: #8a8a90;
+  --accent: #2a2a2e;
+  --accent-foreground: #e8e8ea;
+  --destructive: #ef4444;
+  --border: #2a2a2e;
+  --input: #2a2a2e;
+  --ring: #9333ea;
+  --radius: 0.25rem;
+
+  --bm-bg: #0e0e10;
+  --bm-pane: #161618;
+  --bm-pane-header: #1c1c1f;
+  --bm-border: #2a2a2e;
+  --bm-text: #e8e8ea;
+  --bm-text-secondary: #8a8a90;
+  --bm-text-dim: #62626a;
+  --bm-live: #a855f7;
+  --bm-link: #6ea8fe;
+  --bm-warning: #e0c34c;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  /* Sama seperti app desktop: tanpa ring yang terlihat, kontrol
+     ikon-saja tidak bisa dipakai lewat keyboard. */
+  :focus-visible {
+    outline: 2px solid var(--bm-link);
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-purple) 35%, transparent);
+    color: var(--foreground);
+  }
+}
+
+@layer utilities {
+  .glow-purple-sm {
+    box-shadow:
+      0 0 10px rgba(147, 51, 234, 0.2),
+      0 0 30px rgba(147, 51, 234, 0.06);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .card-surface {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .card-surface:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    border-color: rgba(147, 51, 234, 0.25);
+  }
+
+  /* Cahaya ungu lembut di belakang hero dan judul halaman harga.
+     Radial, bukan box-shadow, supaya tepinya tidak kelihatan. */
+  .aurora-purple {
+    background:
+      radial-gradient(
+        60% 55% at 50% 0%,
+        rgba(147, 51, 234, 0.22) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        40% 40% at 85% 15%,
+        rgba(192, 38, 211, 0.12) 0%,
+        transparent 70%
+      );
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+@keyframes bm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bm-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-bm-fade-in {
+  animation: bm-fade-in 0.15s ease-out forwards;
+}
+
+.animate-bm-dialog-in {
+  animation: bm-dialog-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-bm-fade-in,
+  .animate-bm-dialog-in {
+    animation: none;
+    opacity: 1;
+  }
+}
