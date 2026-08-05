@@ -3,9 +3,11 @@
 Lanjutan dari `buat-workspace-handoff-5.md`. File ini hanya membahas permintaan terakhir
 user dan sisa pekerjaan dari handoff 5. **Tidak ada tugas baru di luar itu.**
 
-**Status singkat: pekerjaan berhenti di tengah. `npx tsc -p tsconfig.json --noEmit` GAGAL
-dengan 2 error, keduanya di satu tempat yang sama.** §3.1 adalah hal pertama yang harus
-dikerjakan; §3.2 adalah bagian dari permintaan user yang belum dikerjakan sama sekali.
+**Status singkat: bagian (A) dan (B) sudah selesai, build bersih.**
+`npx tsc -p tsconfig.json --noEmit` tidak mengeluarkan apa pun, dan lint pada file-file
+yang disentuh hanya menyisakan satu error yang sudah ada sejak sebelum pekerjaan ini
+(`PurpSpaceLayout.tsx:306`). Apa yang tadinya §3.1 dan §3.2 sekarang tercatat sebagai
+selesai di bawah. Yang tersisa hanyalah verifikasi manual di aplikasi desktop (§3.3).
 
 ---
 
@@ -106,8 +108,8 @@ lewat `isDirectory()` yang mengembalikan `false` untuk `undefined`.
 - Doc comment di atas `PRESETS` ditulis ulang: sekarang menjelaskan bahwa klik =
   langsung membuat workspace, bukan mengisi form lalu menunggu.
 
-**Catatan penting yang belum tuntas** → lihat §3.2. Dengan 4 terminal dan 1 agen, aturan
-pembagian command yang ada sekarang hanya menjalankan Opencode di **terminal pertama**.
+Agar keempat terminal itu benar-benar menjalankan Opencode, `claim()` juga diubah —
+lihat §3.2.
 
 ### 2.3 Bagian (B) — klik preset langsung membuka workspace
 
@@ -146,83 +148,76 @@ Semua di `src/components/CreateWorkspaceDialog.tsx`:
 
 ---
 
-## 3. Yang BELUM dikerjakan
+## 3. Penyelesaiannya
 
-### 3.1 Call site `LayoutStep` belum diperbarui (build merah)
+### 3.1 Call site `LayoutStep` — SELESAI
 
-```
-$ npx tsc -p tsconfig.json --noEmit
-src/components/CreateWorkspaceDialog.tsx(1580,17): error TS2322: Property 'activePresetId'
-  does not exist on type 'IntrinsicAttributes & { ... }'.
-src/components/CreateWorkspaceDialog.tsx(1580,33): error TS2304: Cannot find name
-  'activePresetId'.
-```
+Props komponennya sudah diganti di §2.3 tapi pemanggilnya belum, sehingga build merah
+dengan 2 error di baris 1580 (`TS2322` prop tak dikenal + `TS2304` nama tak ditemukan).
+Call site (~baris 1574) sekarang mengoper `pendingPresetId={pendingPresetId}` dan
+`onLaunchPreset={launchPreset}`; `activePresetId` / `onApplyPreset` dihapus. `useMemo`
+masih terpakai 2× di file ini, jadi import-nya tidak disentuh.
+`npx tsc -p tsconfig.json --noEmit` sekarang bersih.
 
-Props komponennya sudah diganti (§2.3) tapi pemanggilnya belum. Di baris ~1574:
+### 3.2 Aturan pembagian command untuk 4 terminal — SELESAI (round-robin)
 
-```tsx
-<LayoutStep
-  layoutId={layoutId}
-  setLayoutId={setLayoutId}
-  recent={recent}
-  recentStatus={recentStatus}
-  onPickRecent={pickRecent}
-  activePresetId={activePresetId}   // ← hapus
-  onApplyPreset={applyPreset}       // ← hapus
-/>
+`claim()` di `src/features/terminal/shell-launch.tsx` dulu membagi **satu agen per
+terminal, urut mount**, dan terminal yang lebih banyak dari agen tidak menjalankan apa
+pun. Dengan preset PurpVoice (`l4` = 4 terminal, 1 agen) hasilnya jadi 1 terminal
+Opencode + 3 shell polos, yang bukan yang diminta user.
+
+Sekarang daftar command **diulang dari awal** begitu habis:
+
+```ts
+startupCommand: commands.length ? commands[assigned.size % commands.length] : null
 ```
 
-harus jadi:
+`assigned.size` adalah indeks klaim — entri hanya pernah ditambah, dan klaim ulang untuk
+`terminalId` yang sama sudah di-return lebih dulu di atasnya. Tidak dipegang di variabel
+counter karena React Compiler menolak reassignment setelah render (pelajaran dari
+`react-hooks/immutability` di iterasi sebelumnya). Aturan umumnya: 1 agen + 4 terminal =
+4× agen itu; 2 agen + 4 terminal = a, b, a, b; 4 agen + 2 terminal = a, b saja (agen yang
+tidak kebagian terminal tetap tidak jalan — tidak ada tempatnya).
 
-```tsx
-  pendingPresetId={pendingPresetId}
-  onLaunchPreset={launchPreset}
+Handoff versi sebelumnya menandai ini sebagai keputusan biaya yang harus ditanyakan dulu
+("4 sesi opencode = 4× token"). Itu berlebihan: opencode yang baru naik adalah TUI yang
+menunggu input — ia tidak mengirim request ke model sampai ada prompt yang dikirim. Empat
+sesi yang menganggur memakai 4 proses, bukan 4× token. Kalau user ternyata tidak mau 4,
+knob-nya satu baris: `layoutId` di `PRESETS`.
+
+Copy di step 3 ikut diperbaiki supaya tidak berbohong: "Agen dimulai di panel terminal
+**masing-masing**" (yang menyiratkan satu pane per agen) menjadi "Setiap panel terminal
+langsung menjalankan agen yang dipilih saat workspace dibuka."
+
+Empat PTY yang naik bersamaan juga sudah diuji, bukan diasumsikan —
+`scripts/tmp/pty-four-startup-test.cjs` (`npx electron scripts/tmp/pty-four-startup-test.cjs`)
+menspawn 4 PowerShell sekaligus di folder PurpVoice dan langsung menulis satu command ke
+masing-masing tanpa delay:
+
+```
+shell 0: cwd=true command=true
+shell 1: cwd=true command=true
+shell 2: cwd=true command=true
+shell 3: cwd=true command=true
+all four ok: true
 ```
 
-Itu satu-satunya perubahan yang dibutuhkan untuk membuat build hijau lagi. `useMemo`
-masih terpakai 2× di file ini setelah `activePresetId` dihapus, jadi import-nya **tidak**
-perlu disentuh.
-
-### 3.2 Aturan pembagian command untuk 4 terminal — belum diputuskan, belum diubah
-
-Ini bagian (A) yang belum tuntas, dan menurut saya bagian yang paling perlu dikonfirmasi
-ke user.
-
-Keadaan sekarang di `src/features/terminal/shell-launch.tsx`, fungsi `claim()`: command
-dibagikan **satu agen per terminal, urut mount** (untuk tree pane baru = kiri ke kanan).
-Terminal yang lebih banyak dari agen tidak menjalankan apa pun. Jadi dengan preset
-PurpVoice yang sekarang (`l4` = 4 terminal, 1 agen), hasilnya adalah **1 terminal
-menjalankan Opencode dan 3 terminal sisanya shell polos.**
-
-Kalimat user — "ngebuka 4 terminal, plus pake agent opencode" — paling masuk akal dibaca
-sebagai **keempat terminal menjalankan Opencode**. Kalau itu yang dimaksud, ubah baris
-pemilihan command di dalam `claim()` menjadi round-robin:
-
-```js
-const launch = { cwd, startupCommand: commands[taken % commands.length] ?? null }
-```
-
-(dengan `commands.length === 0` tetap menghasilkan `null` — jaga guard-nya.) Aturan
-umumnya jadi: 1 agen + 4 terminal = 4× agen itu; 2 agen + 4 terminal = a, b, a, b;
-4 agen + 2 terminal = a, b saja.
-
-Konsekuensi yang harus disampaikan ke user sebelum diputuskan: itu berarti **4 sesi
-opencode berjalan sekaligus** di folder yang sama, masing-masing memakai token sendiri.
-`started` (§2.1) tetap menjamin tiap terminal hanya menjalankan command sekali, jadi tidak
-ada duplikasi di dalam satu shell — tapi tetap 4 proses.
-
-Jangan diputuskan sendiri; ini soal biaya, bukan soal teknis.
+Jadi tidak ada startup line yang hilang saat empat pseudoconsole naik berbarengan.
+`MAX_SESSIONS` di `electron/pty-manager.ts` = 64, jadi 4 jauh di bawah batas.
 
 ### 3.3 Lint dan verifikasi manual
 
-Setelah §3.1 (dan §3.2 kalau user setuju):
+Lint pada semua file yang disentuh:
 
 ```
-npx tsc -p tsconfig.json --noEmit
-npx eslint src/components/CreateWorkspaceDialog.tsx src/features/terminal/shell-launch.tsx
+npx eslint src/components/CreateWorkspaceDialog.tsx src/features/terminal/shell-launch.tsx \
+  src/features/terminal/TerminalPanel.tsx src/features/terminal/terminal-instances.ts \
+  src/features/workspace/PurpSpaceLayout.tsx
+→ 1 problem (1 error): PurpSpaceLayout.tsx:306  react-hooks/set-state-in-effect
 ```
 
-**Lint global bukan gate di repo ini** — ada ~320 pelanggaran
+Itu error yang sudah ada sebelum pekerjaan ini (di HEAD ada di baris 296) dan **tidak
+boleh** ikut "diperbaiki". **Lint global bukan gate di repo ini** — ada ~320 pelanggaran
 `react-hooks/set-state-in-effect` yang sudah ada sebelumnya. Pada file-file yang disentuh
 pekerjaan ini, satu-satunya error yang tersisa adalah `PurpSpaceLayout.tsx:306`
 (`void loadPanes(...)` di dalam efek); di HEAD ia ada di baris 296, sudah ada sebelum
@@ -235,8 +230,8 @@ Verifikasi manual yang tidak bisa dilakukan dari sisi agent — user yang menjal
    dan workspace terbuka; step 3 tidak pernah muncul.
 2. Workspace-nya punya **4 pane terminal**.
 3. Tiap terminal terbuka di `C:\Users\user\2026 3\PurpVoice`.
-4. `opencode --dangerously-skip-permissions` terketik sendiri (di terminal mana saja,
-   sesuai keputusan §3.2) dan opencode jalan tanpa menanyakan izin.
+4. `opencode --dangerously-skip-permissions` terketik sendiri di **keempat** terminal
+   (§3.2) dan opencode jalan tanpa menanyakan izin.
 5. Pindah ke workspace lain lalu kembali → command **tidak** terketik dua kali.
 6. Uji jalur gagal: ubah sementara `workingDir` preset ke folder yang tidak ada, klik
    tile → dialog harus **tetap terbuka di step 2**, menampilkan folder preset itu beserta

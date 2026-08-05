@@ -59,9 +59,12 @@ export function ShellLaunchProvider({
      * remount (React strict mode, a pane hidden and shown again) neither shifts
      * the assignment nor hands out the same command twice.
      *
-     * Terminals past the number of agents get no command, and agents past the
-     * number of terminals never start. Both are the honest outcome: there is
-     * nowhere to put them.
+     * Once the list runs out it starts over, so a workspace with one agent and
+     * four panes gets that agent in all four. "One agent, then plain shells"
+     * was the other option and it reads as a bug: picking a four-pane layout
+     * *and* an agent says you want to work in four places, not that three of
+     * them should come up empty. Agents past the number of terminals still
+     * never start — there is nowhere to put them.
      */
     const assigned = new Map<string, ShellLaunch>()
 
@@ -69,12 +72,15 @@ export function ShellLaunchProvider({
       claim(terminalId) {
         const seen = assigned.get(terminalId)
         if (seen) return seen
-        // Derived from the map rather than kept in a counter: React Compiler
-        // rejects reassigning a captured `let` after render, and counting is
-        // over a handful of entries.
-        let taken = 0
-        for (const l of assigned.values()) if (l.startupCommand) taken += 1
-        const launch: ShellLaunch = { cwd, startupCommand: commands[taken] ?? null }
+        // `assigned.size` is the claim index: entries are only ever added, and
+        // a repeat claim returned above. Kept off a counter variable because
+        // React Compiler rejects reassigning one after render.
+        const launch: ShellLaunch = {
+          cwd,
+          startupCommand: commands.length
+            ? commands[assigned.size % commands.length]
+            : null,
+        }
         assigned.set(terminalId, launch)
         return launch
       },

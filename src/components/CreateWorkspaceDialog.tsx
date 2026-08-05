@@ -917,7 +917,8 @@ function AgentsStep({
             Jalankan agen secara otomatis
           </span>
           <p className="text-[11px] text-zinc-500 mt-0.5">
-            Agen dimulai di panel terminal masing-masing saat workspace dibuka.
+            Setiap panel terminal langsung menjalankan agen yang dipilih saat
+            workspace dibuka.
           </p>
         </div>
         <Badge variant="secondary" className="text-[11px] font-mono shrink-0">
@@ -1577,8 +1578,8 @@ export function CreateWorkspaceDialog({
                 recent={recent}
                 recentStatus={recentStatus}
                 onPickRecent={pickRecent}
-                activePresetId={activePresetId}
-                onApplyPreset={applyPreset}
+                pendingPresetId={pendingPresetId}
+                onLaunchPreset={launchPreset}
               />
             </div>
           )}
