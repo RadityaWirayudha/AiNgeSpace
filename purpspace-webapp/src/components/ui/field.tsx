@@ -16,12 +16,10 @@ export function Field({
   label,
   hint,
   className,
-  children,
   ...props
-}: Omit<ComponentProps<"input">, "children"> & {
+}: ComponentProps<"input"> & {
   label: string
   hint?: ReactNode
-  children?: never
 }) {
   const id = useId()
   return (
