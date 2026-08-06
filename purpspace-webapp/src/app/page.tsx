@@ -155,6 +155,7 @@ export default function LandingPage() {
 
                 <a
                   href={DOWNLOAD_URL}
+                  download
                   className={buttonClass({ size: "lg", className: "mt-8" })}
                 >
                   <Download className="size-4" />

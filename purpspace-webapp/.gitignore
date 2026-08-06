@@ -1,0 +1,8 @@
+# Ignore khusus website. Yang lintas-project (node_modules, .next, .env*,
+# *.tsbuildinfo) sudah ditangani .gitignore di root, sama seperti pembagian di
+# purpspace-electron/.gitignore.
+
+# Installer aplikasi desktop, ~180 MB. Isinya salinan dari
+# purpspace-electron/dist/ yang dibuat `npm run unduhan:sync` — bukan sumber
+# kebenaran, dan bukan sesuatu yang pantas masuk riwayat git.
+/public/unduhan/

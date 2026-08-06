@@ -46,7 +46,13 @@ export function DoneStep({
         lalu masuk pakai email yang barusan kamu daftarkan.
       </p>
 
-      <a href={DOWNLOAD_URL} className={buttonClass({ size: "lg", className: "mt-8 w-full" })}>
+      {/* `download`: berkasnya se-origin, jadi browser langsung menyimpannya
+          dengan nama aslinya alih-alih menavigasi ke sana. */}
+      <a
+        href={DOWNLOAD_URL}
+        download
+        className={buttonClass({ size: "lg", className: "mt-8 w-full" })}
+      >
         <Download className="size-4" />
         Unduh untuk {DOWNLOAD_META.platform}
       </a>
