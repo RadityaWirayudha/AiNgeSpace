@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { LAYOUT_PRESET_IDS } from "@/lib/workspace/layouts"
 import { isUuid } from "@/lib/uuid"
 import { z } from "zod"
@@ -23,7 +22,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { id } = await params
     // A local-only workspace id ("local-3") never reaches the database as a
     // uuid comparison — PostgreSQL rejects the literal and the catch below
@@ -31,7 +30,6 @@ export async function GET(
     if (!isUuid(id)) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
-    const supabase = createServerClient()
 
     // maybeSingle, not single: a workspace that does not exist (or belongs to
     // somebody else) is a 404, and `single()` turned that into a thrown error
@@ -62,15 +60,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { id } = await params
     if (!isUuid(id)) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
     const body = await request.json()
     const parsed = updateWorkspaceSchema.parse(body)
-
-    const supabase = createServerClient()
 
     const { data, error } = await supabase
       .from("workspaces_purpspace")
@@ -102,12 +98,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { id } = await params
     if (!isUuid(id)) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
     }
-    const supabase = createServerClient()
 
     // Panes and env vars go with the workspace via ON DELETE CASCADE.
     const { error } = await supabase

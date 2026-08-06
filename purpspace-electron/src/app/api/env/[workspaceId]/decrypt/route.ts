@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/supabase/encryption"
 import { isUuid } from "@/lib/uuid"
 
@@ -9,9 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { workspaceId } = await params
-    const supabase = createServerClient()
 
     // A non-uuid id would make Postgres reject the comparison and answer 500
     // where the caller should simply be told the workspace is not theirs.

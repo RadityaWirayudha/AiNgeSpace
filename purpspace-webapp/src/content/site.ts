@@ -1,31 +1,26 @@
 /**
  * Tautan unduhan aplikasi desktop.
  *
- * Berkasnya tidak ada di git — ukurannya ~180 MB dan sumbernya build
- * `purpspace-electron`, jadi `public/unduhan/` ter-gitignore. Yang mengisinya:
+ * Installernya di-host di GitHub Releases — bukan di server website. Alasannya:
+ * (1) binernya ~180 MB, tidak pantas ada di git atau di aset Cloudflare Worker,
+ * (2) GitHub Releases gratis untuk public repo, sudah punya CDN, dan
+ *     `electron-updater` mendukungnya secara native.
  *
- *   cd purpspace-electron && npm run build:desktop
- *   cd purpspace-webapp   && npm run unduhan:sync
+ * Setiap rilis baru: naikkan VERSI di bawah, jalankan `npm run build:desktop`
+ * di purpspace-electron, upload hasilnya ke GitHub Release yang baru.
+ * `DOWNLOAD_URL` akan otomatis mengarah ke versi yang benar.
  *
  * Nama berkasnya harus sama persis dengan `nsis.artifactName` di
- * `purpspace-electron/electron-builder.yml`. Dulu tidak sama — URL di sini
- * menyebut `PurpSpace-Setup-x64.exe` sementara buildnya menghasilkan
- * `PurpSpace-Setup-0.1.0-x64.exe` — dan tombolnya 404 tanpa ada yang tahu.
- * Sekarang `unduhan:sync` menolak jalan kalau `VERSI` di bawah tidak cocok
- * dengan versi app desktop.
- *
- * Satu konstanta, bukan dua: dulu versinya ditulis terpisah di URL dan di label,
- * dan itu persis cara keduanya bisa berselisih tanpa ketahuan.
- *
- * Saat website benar-benar di-deploy, arahkan `DOWNLOAD_URL` ke GitHub Releases
- * atau CDN — hosting website bukan tempat yang tepat untuk biner 180 MB.
+ * `purpspace-electron/electron-builder.yml`.
  */
+
+const REPO = "RadityaWirayudha/AiNgeSpace"
 
 /** Samakan dengan `version` di purpspace-electron/package.json setiap rilis. */
 const VERSI = "0.1.0"
 
 export const DOWNLOAD_FILE = `PurpSpace-Setup-${VERSI}-x64.exe`
-export const DOWNLOAD_URL = `/unduhan/${DOWNLOAD_FILE}`
+export const DOWNLOAD_URL = `https://github.com/${REPO}/releases/download/v${VERSI}/${DOWNLOAD_FILE}`
 
 export const DOWNLOAD_META = {
   platform: "Windows 10/11",

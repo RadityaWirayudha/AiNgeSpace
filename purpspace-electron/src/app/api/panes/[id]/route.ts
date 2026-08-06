@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient, type SupabaseServerClient } from "@/lib/supabase/server"
 import { treeSchema, treeToJson } from "@/lib/panes/tree-schema"
 import { isUuid } from "@/lib/uuid"
 import type { Database } from "@/types/database"
@@ -26,7 +25,7 @@ const updatePaneSchema = z
  * /api/terminals/[id] used.
  */
 async function ownedPane(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: SupabaseServerClient,
   paneId: string,
   userId: string
 ) {
@@ -49,12 +48,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { id } = await params
     const body = await request.json()
     const parsed = updatePaneSchema.parse(body)
-
-    const supabase = createServerClient()
 
     if (!(await ownedPane(supabase, id, userId))) {
       return NextResponse.json({ error: "Pane not found" }, { status: 404 })
@@ -95,9 +92,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { id } = await params
-    const supabase = createServerClient()
 
     if (!(await ownedPane(supabase, id, userId))) {
       return NextResponse.json({ error: "Pane not found" }, { status: 404 })

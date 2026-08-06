@@ -6,3 +6,6 @@
 # purpspace-electron/dist/ yang dibuat `npm run unduhan:sync` — bukan sumber
 # kebenaran, dan bukan sesuatu yang pantas masuk riwayat git.
 /public/unduhan/
+
+# OpenNext Cloudflare build output — generated, bukan source.
+/.open-next/

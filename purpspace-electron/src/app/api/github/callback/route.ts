@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { encrypt } from "@/lib/supabase/encryption"
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!
@@ -8,7 +7,7 @@ const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { searchParams } = new URL(request.url)
     const code = searchParams.get("code")
 
@@ -43,8 +42,6 @@ export async function GET(request: NextRequest) {
     })
 
     const githubUser = await userResponse.json()
-
-    const supabase = createServerClient()
 
     // One upsert replaces the old select-then-insert-or-update. That sequence
     // had a real race: two callbacks arriving together both saw no row and both

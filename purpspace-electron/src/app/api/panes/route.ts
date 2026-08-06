@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { treeSchema, treeToJson } from "@/lib/panes/tree-schema"
 import { z } from "zod"
 
@@ -20,15 +19,13 @@ const createPaneSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { searchParams } = new URL(request.url)
     const workspaceId = searchParams.get("workspaceId")
 
     if (!workspaceId) {
       return NextResponse.json({ error: "workspaceId is required" }, { status: 400 })
     }
-
-    const supabase = createServerClient()
 
     // The old /api/terminals GET filtered by workspace_id and never checked who
     // owned it, so any signed-in user could read anyone else's terminal list by
@@ -63,11 +60,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const body = await request.json()
     const parsed = createPaneSchema.parse(body)
-
-    const supabase = createServerClient()
 
     const { data: workspace } = await supabase
       .from("workspaces_purpspace")

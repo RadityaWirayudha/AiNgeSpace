@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { DEFAULT_LAYOUT_PRESET, LAYOUT_PRESET_IDS } from "@/lib/workspace/layouts"
 import { z } from "zod"
 
@@ -23,8 +22,7 @@ const createWorkspaceSchema = z.object({
 
 export async function GET() {
   try {
-    const userId = await getAuthUserId()
-    const supabase = createServerClient()
+    const { supabase, userId } = await createAuthedClient()
 
     const { data, error } = await supabase
       .from("workspaces_purpspace")
@@ -69,11 +67,9 @@ function nextWorkspaceName(existing: string[]): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const body = await request.json()
     const parsed = createWorkspaceSchema.parse(body)
-
-    const supabase = createServerClient()
 
     // One read serves both the auto-name and the sort_order. New workspaces land
     // at the end of the user's list; read-then-write is safe enough, because a
@@ -123,11 +119,9 @@ const reorderSchema = z.object({
 /** Persists the sidebar's drag-to-reorder, which until now was lost on reload. */
 export async function PATCH(request: NextRequest) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const body = await request.json()
     const { orderedIds } = reorderSchema.parse(body)
-
-    const supabase = createServerClient()
 
     // Every update is scoped to the caller, so an id belonging to someone else
     // matches no row rather than reordering their sidebar.

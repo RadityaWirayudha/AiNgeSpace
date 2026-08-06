@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/supabase/encryption"
 
 export async function GET() {
   try {
-    const userId = await getAuthUserId()
-    const supabase = createServerClient()
+    const { supabase, userId } = await createAuthedClient()
 
     // maybeSingle: a user who has never connected GitHub is the normal case,
     // and `single()` treated it as an error that surfaced as a 500 instead of

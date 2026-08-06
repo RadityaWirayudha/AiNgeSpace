@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthUserId } from "@/lib/clerk/auth"
-import { createServerClient } from "@/lib/supabase/server"
+import { createAuthedClient, type SupabaseServerClient } from "@/lib/supabase/server"
 import { encrypt } from "@/lib/supabase/encryption"
 import { isUuid } from "@/lib/uuid"
 import { z } from "zod"
@@ -11,7 +10,7 @@ import { z } from "zod"
  * Postgres reject the comparison outright, which turned a plain 404 into a 500.
  */
 async function ownsWorkspace(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: SupabaseServerClient,
   userId: string,
   workspaceId: string
 ): Promise<boolean> {
@@ -42,9 +41,8 @@ export async function GET(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { workspaceId } = await params
-    const supabase = createServerClient()
 
     if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
@@ -74,12 +72,10 @@ export async function POST(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { workspaceId } = await params
     const body = await request.json()
     const parsed = upsertEnvSchema.parse(body)
-
-    const supabase = createServerClient()
 
     if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })
@@ -120,7 +116,7 @@ export async function DELETE(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const userId = await getAuthUserId()
+    const { supabase, userId } = await createAuthedClient()
     const { workspaceId } = await params
     const { searchParams } = new URL(request.url)
     const envId = searchParams.get("id")
@@ -130,8 +126,6 @@ export async function DELETE(
     if (!envId || !isUuid(envId)) {
       return NextResponse.json({ error: "id is required" }, { status: 400 })
     }
-
-    const supabase = createServerClient()
 
     if (!(await ownsWorkspace(supabase, userId, workspaceId))) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 })

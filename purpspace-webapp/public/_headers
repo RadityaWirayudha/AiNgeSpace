@@ -1,0 +1,6 @@
+/*
+ * Static assets: cache selamanya (Next.js sudah embed content hash di nama file,
+ * jadi stale cache tidak akan pernah terjadi).
+ */
+/_next/static/*
+  Cache-Control: public,max-age=31536000,immutable
