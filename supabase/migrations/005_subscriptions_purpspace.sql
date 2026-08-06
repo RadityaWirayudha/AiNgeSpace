@@ -103,14 +103,71 @@ alter table public.subscriptions_purpspace enable row level security;
 -- sudah tertutup: pencarian lewat cookie memakai primary key, dan pencarian
 -- lewat akun memakai index yang otomatis dibuat UNIQUE(clerk_user_id).
 
+-- Trigger updated_at.
+--
+-- Fungsinya TIDAK dipanggil lewat nama yang ditebak, dan tidak ada fungsi baru
+-- yang dibuat di sini. Alasannya: nama fungsi itu berbeda-beda tergantung dari
+-- mana database ini naik. 001 membuatnya sebagai `update_updated_at_column()`,
+-- 002 membuat `set_updated_at_aingespace()`, dan 003 merename yang kedua jadi
+-- `set_updated_at_purpspace()` — tapi rename itu hanya jalan kalau nama lamanya
+-- memang ada. Database yang lompat atau yang lahir dari 001 akan berakhir
+-- dengan nama yang lain sama sekali.
+--
+-- Yang pasti sama di semua kasus itu bukan namanya, melainkan fungsi yang
+-- benar-benar dipakai keempat tabel lain. Jadi itu yang dicari: lewat trigger
+-- mereka, lalu dipakai apa adanya. Kalau keempat tabel itu belum ada triggernya,
+-- migrasi ini berhenti — bukan diam-diam membuat fungsi kelima yang berbeda.
 do $$
+declare
+  fn_oid    oid;
+  fn_sig    text;
+  fn_jumlah integer;
 begin
-  if to_regproc('public.set_updated_at_purpspace()') is null then
+  select count(distinct t.tgfoid)
+    into fn_jumlah
+    from pg_trigger   t
+    join pg_class     c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and not t.tgisinternal
+     and t.tgname like '%\_set\_updated\_at'
+     and c.relname in ('workspaces_purpspace',
+                       'panes_purpspace',
+                       'github_connections_purpspace',
+                       'env_vars_purpspace');
+
+  if fn_jumlah = 0 then
     raise exception
-      'fungsi public.set_updated_at_purpspace() tidak ada — jalankan 002 lalu '
-      '003 lebih dulu. Jangan membuat fungsi baru di sini; keempat tabel lain '
-      'memakai fungsi yang sama.';
+      'tidak ada trigger *_set_updated_at di keempat tabel _purpspace, jadi '
+      'tidak ketahuan fungsi mana yang harus dipakai. Jalankan 002 lalu 003 '
+      'lebih dulu. Untuk melihat apa yang sebenarnya ada di database ini, '
+      'lihat query diagnosa di bagian Verifikasi di bawah.';
   end if;
+
+  if fn_jumlah > 1 then
+    raise exception
+      'keempat tabel _purpspace memakai % fungsi updated_at yang berbeda — '
+      'itu harus dirapikan dulu, karena tabel ini harus ikut yang mana pun '
+      'menjadi ambigu.', fn_jumlah;
+  end if;
+
+  select t.tgfoid
+    into fn_oid
+    from pg_trigger   t
+    join pg_class     c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and not t.tgisinternal
+     and t.tgname like '%\_set\_updated\_at'
+     and c.relname in ('workspaces_purpspace',
+                       'panes_purpspace',
+                       'github_connections_purpspace',
+                       'env_vars_purpspace')
+   limit 1;
+
+  -- regprocedure mencetak signature lengkapnya, mis. `set_updated_at_purpspace()`.
+  fn_sig := fn_oid::regprocedure::text;
+  raise notice 'memakai fungsi updated_at milik tabel lain: %', fn_sig;
 
   if not exists (
     select 1
@@ -121,9 +178,13 @@ begin
        and c.relname = 'subscriptions_purpspace'
        and t.tgname  = 'subscriptions_purpspace_set_updated_at'
   ) then
-    create trigger subscriptions_purpspace_set_updated_at
-      before update on public.subscriptions_purpspace
-      for each row execute function public.set_updated_at_purpspace();
+    -- `%s`, bukan `%I`: `fn_sig` sudah berbentuk signature lengkap dari
+    -- regprocedure (mis. `set_updated_at_purpspace()`), jadi mengutipnya lagi
+    -- justru membuatnya tidak sah.
+    execute format(
+      'create trigger subscriptions_purpspace_set_updated_at '
+      'before update on public.subscriptions_purpspace '
+      'for each row execute function %s', fn_sig);
     raise notice 'added trigger subscriptions_purpspace_set_updated_at';
   else
     raise notice 'trigger subscriptions_purpspace_set_updated_at sudah ada';
@@ -155,11 +216,39 @@ notify pgrst, 'reload schema';
 --       where schemaname = 'public' and tablename = 'subscriptions_purpspace';
 --                                                                 -- harus 0
 --
--- 3. Trigger updated_at terpasang:
+-- 3. Trigger updated_at terpasang, dan menunjuk ke fungsi yang SAMA dengan
+--    keempat tabel lain:
 --
---      select tgname from pg_trigger
---       where tgrelid = 'public.subscriptions_purpspace'::regclass
---         and not tgisinternal;
+--      select c.relname          as tabel,
+--             t.tgname           as trigger,
+--             t.tgfoid::regprocedure as fungsi
+--        from pg_trigger   t
+--        join pg_class     c on c.oid = t.tgrelid
+--        join pg_namespace n on n.oid = c.relnamespace
+--       where n.nspname = 'public'
+--         and not t.tgisinternal
+--         and t.tgname like '%\_set\_updated\_at'
+--       order by 1;
+--
+--    Harus lima baris, dan kolom `fungsi` harus sama persis di kelimanya.
 --
 -- 4. Idempoten: jalankan ulang seluruh file — tidak boleh ada error, dan
 --    noticenya harus berbunyi "trigger ... sudah ada".
+--
+-- ============================================================================
+-- Diagnosa, kalau migrasi ini berhenti dengan "tidak ada trigger ..."
+-- ============================================================================
+-- Artinya keempat tabel lain belum punya trigger updated_at, jadi tidak ada
+-- yang bisa dicontoh. Jalankan dua query ini untuk melihat apa yang sebenarnya
+-- ada, lalu jalankan 002 dan 003 sesuai hasilnya.
+--
+--   -- tabel apa saja yang ada:
+--   select tablename from pg_tables
+--    where schemaname = 'public' order by 1;
+--
+--   -- fungsi updated_at apa saja yang ada, dengan nama apa pun:
+--   select n.nspname || '.' || p.proname || '()' as fungsi
+--     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'public'
+--      and p.proname like '%updated%at%'
+--    order by 1;
