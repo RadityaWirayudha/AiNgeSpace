@@ -20,8 +20,9 @@ import type { PlanId } from "@/content/plans"
 
 /**
  * Semua nilai yang diizinkan CHECK `subscriptions_purpspace_status_known`.
- * Hari ini hanya `trialing` yang pernah ditulis; sisanya baru terpakai begitu
- * webhook Stripe masuk di migrasi 006.
+ * `trialing` ditulis saat pendaftaran. `active` ditulis oleh webhook Midtrans
+ * setelah pembayaran lunas. `past_due` saat invoice lewat tenggat. `canceled`
+ * saat langganan diakhiri.
  */
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled"
 
@@ -37,6 +38,13 @@ export interface Database {
           trial_ends_at: string
           created_at: string
           updated_at: string
+          // Ditambahkan migrasi 006 — Midtrans
+          /** order_id Midtrans yang sudah LUNAS. Null selama masih trial. */
+          midtrans_order_id: string | null
+          /** order_id yang sedang menunggu pembayaran. Di-clear setelah webhook berhasil. */
+          pending_order_id: string | null
+          /** Kapan periode berbayar berakhir, diisi webhook setelah bayar. */
+          current_period_end: string | null
         }
         Insert: {
           id?: string
@@ -46,6 +54,9 @@ export interface Database {
           trial_ends_at: string
           created_at?: string
           updated_at?: string
+          midtrans_order_id?: string | null
+          pending_order_id?: string | null
+          current_period_end?: string | null
         }
         Update: {
           id?: string
@@ -55,6 +66,9 @@ export interface Database {
           trial_ends_at?: string
           created_at?: string
           updated_at?: string
+          midtrans_order_id?: string | null
+          pending_order_id?: string | null
+          current_period_end?: string | null
         }
         Relationships: []
       }

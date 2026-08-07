@@ -193,10 +193,33 @@ Urutan kerja dari panduan itu (ringkasan):
 
 ```
 Clerk↔Supabase auth  ✅ selesai
-RLS policies SQL     ❌ belum dijalankan
+Midtrans kode        ✅ selesai (lihat bagian bawah)
+RLS policies SQL     ❌ user harus jalankan manual
 Local test           ❌ belum
 Cloudflare deploy    ❌ belum (wrangler login belum)
 Desktop build        ❌ belum
 GitHub Release       ❌ belum
-Midtrans kode        ❌ belum (panduan sudah ada)
 ```
+
+---
+
+## Kode Midtrans yang Sudah Ditulis
+
+File-file berikut sudah ada di repo, tidak perlu dibuat lagi:
+
+| File | Status |
+|---|---|
+| `purpspace-webapp/supabase/migrations/006_midtrans_subscriptions_purpspace.sql` | ✅ dibuat |
+| `purpspace-webapp/src/types/database.ts` | ✅ diperbarui (kolom Midtrans ditambahkan) |
+| `purpspace-webapp/src/lib/midtrans/server.ts` | ✅ dibuat |
+| `purpspace-webapp/src/app/api/midtrans/webhook/route.ts` | ✅ dibuat |
+| `purpspace-webapp/src/app/api/bayar/route.ts` | ✅ dibuat |
+| `purpspace-webapp/src/components/SnapScript.tsx` | ✅ dibuat |
+
+Yang masih perlu dilakukan untuk Midtrans:
+- [ ] User daftar akun Midtrans, ambil Sandbox keys
+- [ ] Tambah ke `.env.local`: `MIDTRANS_SERVER_KEY` + `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY`
+- [ ] Jalankan `npm install midtrans-client` di `purpspace-webapp`
+- [ ] Jalankan migrasi 006 di Supabase SQL Editor (file sudah ada, tinggal paste + run)
+- [ ] Daftarkan webhook URL di Midtrans dashboard setelah deploy
+- [ ] Set `MIDTRANS_SERVER_KEY` production via `wrangler secret put`
