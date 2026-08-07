@@ -1,13 +1,13 @@
 /**
  * Bentuk tabel Supabase yang disentuh WEBSITE — hanya satu.
  *
- * Empat tabel milik aplikasi desktop (workspaces_purpspace, panes_purpspace,
- * github_connections_purpspace, env_vars_purpspace) sengaja tidak ikut disalin
+ * Empat tabel milik aplikasi desktop (purpspace_workspaces, purpspace_panes,
+ * purpspace_github_connections, purpspace_env_vars) sengaja tidak ikut disalin
  * ke sini. Website tidak pernah menanyakannya, jadi tipenya cuma akan jadi kode
  * mati yang lama-lama menyimpang dari skema sebenarnya. Bentuk lengkapnya ada di
  * `purpspace-electron/src/types/database.ts`.
  *
- * Sumber kebenaran kolom di bawah ini: `supabase/migrations/005_subscriptions_purpspace.sql`.
+ * Sumber kebenaran kolom di bawah ini: `supabase/migrations/005_purpspace_subscriptions.sql`.
  */
 
 /**
@@ -19,7 +19,7 @@
 import type { PlanId } from "@/content/plans"
 
 /**
- * Semua nilai yang diizinkan CHECK `subscriptions_purpspace_status_known`.
+ * Semua nilai yang diizinkan CHECK `purpspace_subscriptions_status_known`.
  * `trialing` ditulis saat pendaftaran. `active` ditulis oleh webhook Midtrans
  * setelah pembayaran lunas. `past_due` saat invoice lewat tenggat. `canceled`
  * saat langganan diakhiri.
@@ -29,7 +29,7 @@ export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled"
 export interface Database {
   public: {
     Tables: {
-      subscriptions_purpspace: {
+      purpspace_subscriptions: {
         Row: {
           id: string
           clerk_user_id: string

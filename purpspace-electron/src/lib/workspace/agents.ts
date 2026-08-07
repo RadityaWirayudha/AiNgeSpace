@@ -1,7 +1,7 @@
 /**
  * The agent catalogue, kept out of the dialog for the same reason the layout
  * presets are: two unrelated places need it. `CreateWorkspaceDialog` renders the
- * list and writes the chosen ids to `workspaces_purpspace.agent_ids`, and
+ * list and writes the chosen ids to `purpspace_workspaces.agent_ids`, and
  * `PurpSpaceLayout` reads those ids back to decide what each terminal runs on
  * open. A copy in the dialog would mean the second half silently disagreed with
  * the first the moment either changed.

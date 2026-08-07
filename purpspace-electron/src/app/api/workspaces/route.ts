@@ -25,10 +25,10 @@ export async function GET() {
     const { supabase, userId } = await createAuthedClient()
 
     const { data, error } = await supabase
-      .from("workspaces_purpspace")
+      .from("purpspace_workspaces")
       .select("*")
       .eq("clerk_user_id", userId)
-      // Matches workspaces_purpspace_owner_idx, and honours the order the user
+      // Matches purpspace_workspaces_owner_idx, and honours the order the user
       // set by dragging rows in the sidebar.
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // collision only means two rows share a sort_order and the created_at
     // tiebreaker keeps the order stable either way.
     const { data: existing, error: existingError } = await supabase
-      .from("workspaces_purpspace")
+      .from("purpspace_workspaces")
       .select("name, sort_order")
       .eq("clerk_user_id", userId)
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     const lastOrder = owned.reduce((max, row) => Math.max(max, row.sort_order), -1)
 
     const { data, error } = await supabase
-      .from("workspaces_purpspace")
+      .from("purpspace_workspaces")
       .insert({
         clerk_user_id: userId,
         name: parsed.name ?? nextWorkspaceName(owned.map((row) => row.name)),
@@ -128,7 +128,7 @@ export async function PATCH(request: NextRequest) {
     const results = await Promise.all(
       orderedIds.map((id, index) =>
         supabase
-          .from("workspaces_purpspace")
+          .from("purpspace_workspaces")
           .update({ sort_order: index })
           .eq("id", id)
           .eq("clerk_user_id", userId)

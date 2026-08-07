@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient()
 
     const { data, error } = await supabase
-      .from("subscriptions_purpspace")
+      .from("purpspace_subscriptions")
       .insert({
         clerk_user_id: user.id,
         plan_id: parsed.planId,

@@ -10,8 +10,8 @@ import type { PaneTerminalNode } from "@/features/terminal/pane-terminal-store"
  */
 
 export type WorkspaceRow =
-  Database["public"]["Tables"]["workspaces_purpspace"]["Row"]
-export type PaneRow = Database["public"]["Tables"]["panes_purpspace"]["Row"]
+  Database["public"]["Tables"]["purpspace_workspaces"]["Row"]
+export type PaneRow = Database["public"]["Tables"]["purpspace_panes"]["Row"]
 
 /** A route answered, but not with what was asked for. */
 export class ApiError extends Error {

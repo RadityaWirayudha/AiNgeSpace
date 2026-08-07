@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClient() // service role — bisa baca/tulis semua
 
   const { data: sub, error: findError } = await supabase
-    .from("subscriptions_purpspace")
+    .from("purpspace_subscriptions")
     .select("id, plan_id, current_period_end")
     .eq("pending_order_id", orderId)
     .single()
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   //    midtrans_order_id unik (UNIQUE INDEX) → kalau event dikirim dua kali,
   //    update kedua akan conflict di index tapi tidak mengubah data apa pun.
   const { error: updateError } = await supabase
-    .from("subscriptions_purpspace")
+    .from("purpspace_subscriptions")
     .update({
       status: "active",
       current_period_end: periodEnd.toISOString(),

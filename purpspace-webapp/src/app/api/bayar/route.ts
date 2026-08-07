@@ -6,7 +6,7 @@
  * masuk. Yang endpoint ini lakukan hanya: bikin token Snap lalu simpan
  * pending_order_id supaya webhook bisa mencocokkan pembayaran ke user yang benar.
  *
- * Identifikasi user: cookie `ps_langganan` (uuid baris di subscriptions_purpspace),
+ * Identifikasi user: cookie `ps_langganan` (uuid baris di purpspace_subscriptions),
  * sama dengan pola yang dipakai halaman `/mulai`. Website tidak punya sesi Clerk
  * di browser — sesi Clerk ada di aplikasi desktop.
  *
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   // 3. Ambil langganan dari Supabase.
   const supabase = createServerClient()
   const { data: sub, error: findError } = await supabase
-    .from("subscriptions_purpspace")
+    .from("purpspace_subscriptions")
     .select("id, clerk_user_id, status")
     .eq("id", langgananId)
     .single()
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
   //    Kalau disimpan sesudah, ada window di mana webhook datang sebelum
   //    pending_order_id ada di database — dan webhook-nya akan di-ignore.
   const { error: updateError } = await supabase
-    .from("subscriptions_purpspace")
+    .from("purpspace_subscriptions")
     .update({ pending_order_id: orderId })
     .eq("id", sub.id)
 
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
   } catch (midtransError) {
     // Midtrans gagal → rollback pending_order_id supaya user bisa coba lagi.
     await supabase
-      .from("subscriptions_purpspace")
+      .from("purpspace_subscriptions")
       .update({ pending_order_id: null })
       .eq("id", sub.id)
 

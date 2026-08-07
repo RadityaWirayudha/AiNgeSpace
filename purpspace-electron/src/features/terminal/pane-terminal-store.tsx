@@ -69,7 +69,7 @@ type PaneTreeAction =
 export interface HydratedPane {
   paneId: string
   tree: PaneTerminalNode
-  /** `panes_purpspace.name_seq` — how far "Terminal A, B, C…" had got. */
+  /** `purpspace_panes.name_seq` — how far "Terminal A, B, C…" had got. */
   nameSeq?: number
 }
 
@@ -123,7 +123,7 @@ export function makeInitialTree(name = "Terminal A"): TerminalLeaf {
 const MAX_TREE_DEPTH = 8
 
 /**
- * Shape check for a `panes_purpspace.tree` value.
+ * Shape check for a `purpspace_panes.tree` value.
  *
  * The API validates this with zod on the way in, but a row written by an older
  * build — or edited by hand in the Supabase dashboard — must not be able to

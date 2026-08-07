@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 }
 
 /**
- * Query-nya lewat service role dari server. RLS di `subscriptions_purpspace`
+ * Query-nya lewat service role dari server. RLS di `purpspace_subscriptions`
  * nyala tanpa satu pun policy, jadi tidak ada jalan lain — dan memang tidak
  * perlu ada: browser tidak boleh menanyakan tabel ini sendiri.
  */
@@ -44,7 +44,7 @@ async function bacaLangganan(): Promise<LanggananView | null> {
 
   const supabase = createServerClient()
   const { data, error } = await supabase
-    .from("subscriptions_purpspace")
+    .from("purpspace_subscriptions")
     .select("plan_id, status, trial_ends_at")
     .eq("id", id)
     .maybeSingle()

@@ -5,7 +5,7 @@
  * dan itu disengaja: dua proyek, satu database, satu cara mengaksesnya.
  *
  * Tidak ada padanan `client.ts` berbasis anon key di project ini, dan jangan
- * dibuat. Keempat tabel yang sudah ada plus `subscriptions_purpspace` semuanya
+ * dibuat. Keempat tabel yang sudah ada plus `purpspace_subscriptions` semuanya
  * menyalakan RLS tanpa satu pun policy — anon dan authenticated ditolak
  * seluruhnya, service role melewatinya. Kalau suatu query mengembalikan array
  * kosong dari browser, jawabannya memindahkan query itu ke route handler, bukan

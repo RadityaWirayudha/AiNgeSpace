@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     // owned it, so any signed-in user could read anyone else's terminal list by
     // guessing a workspace id. Ownership is verified first now.
     const { data: workspace } = await supabase
-      .from("workspaces_purpspace")
+      .from("purpspace_workspaces")
       .select("id")
       .eq("id", workspaceId)
       .eq("clerk_user_id", userId)
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .from("panes_purpspace")
+      .from("purpspace_panes")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("position", { ascending: true })
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const parsed = createPaneSchema.parse(body)
 
     const { data: workspace } = await supabase
-      .from("workspaces_purpspace")
+      .from("purpspace_workspaces")
       .select("id")
       .eq("id", parsed.workspaceId)
       .eq("clerk_user_id", userId)
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     // let a caller overwrite somebody else's pane row by guessing its id and
     // naming a workspace they do own.
     const { data, error } = await supabase
-      .from("panes_purpspace")
+      .from("purpspace_panes")
       .insert({
         ...(parsed.id ? { id: parsed.id } : {}),
         workspace_id: parsed.workspaceId,

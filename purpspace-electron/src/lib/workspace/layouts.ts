@@ -1,7 +1,7 @@
 /**
  * The terminal layout presets, in one place.
  *
- * These ids are written to `workspaces_purpspace.layout_preset`, and that
+ * These ids are written to `purpspace_workspaces.layout_preset`, and that
  * column carries a CHECK constraint listing exactly these six values — so this
  * file and `supabase/migrations/002_rewrite_aingespace_schema.sql` (the table
  * was named `workspaces_aingespace` when it was created; `003_rename_to_

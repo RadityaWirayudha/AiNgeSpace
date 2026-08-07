@@ -9,7 +9,7 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      workspaces_purpspace: {
+      purpspace_workspaces: {
         Row: {
           id: string
           clerk_user_id: string
@@ -45,7 +45,7 @@ export interface Database {
         }
         Relationships: []
       }
-      panes_purpspace: {
+      purpspace_panes: {
         Row: {
           id: string
           workspace_id: string
@@ -81,15 +81,15 @@ export interface Database {
         }
         Relationships: [
           {
-            foreignKeyName: "panes_purpspace_workspace_id_fkey"
+            foreignKeyName: "purpspace_panes_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
-            referencedRelation: "workspaces_purpspace"
+            referencedRelation: "purpspace_workspaces"
             referencedColumns: ["id"]
           }
         ]
       }
-      github_connections_purpspace: {
+      purpspace_github_connections: {
         Row: {
           id: string
           clerk_user_id: string
@@ -119,7 +119,7 @@ export interface Database {
         }
         Relationships: []
       }
-      env_vars_purpspace: {
+      purpspace_env_vars: {
         Row: {
           id: string
           workspace_id: string
@@ -146,10 +146,10 @@ export interface Database {
         }
         Relationships: [
           {
-            foreignKeyName: "env_vars_purpspace_workspace_id_fkey"
+            foreignKeyName: "purpspace_env_vars_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
-            referencedRelation: "workspaces_purpspace"
+            referencedRelation: "purpspace_workspaces"
             referencedColumns: ["id"]
           }
         ]

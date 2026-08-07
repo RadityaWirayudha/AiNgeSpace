@@ -5,7 +5,7 @@ import type { Json } from "@/types/database"
  * The persisted shape of a pane's terminal tree.
  *
  * This mirrors `PaneTerminalNode` in `src/features/terminal/pane-terminal-store.tsx`
- * exactly, so a row from `panes_purpspace.tree` can be dropped straight into
+ * exactly, so a row from `purpspace_panes.tree` can be dropped straight into
  * `state.trees[paneId]` with no translation layer. The two definitions have to
  * move together — anything added to the reducer's node type belongs here too.
  *

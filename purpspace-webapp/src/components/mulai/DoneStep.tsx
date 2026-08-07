@@ -6,7 +6,7 @@
  * ditawarkan bukan tombol "buka dashboard" — dashboard-nya ada di aplikasi
  * desktop — melainkan tombol unduh.
  *
- * Semua yang ditampilkan di sini datang dari baris `subscriptions_purpspace`,
+ * Semua yang ditampilkan di sini datang dari baris `purpspace_subscriptions`,
  * bukan dari state klien: nama paketnya dari `plan_id`, kalimatnya bercabang di
  * `status`, dan tanggalnya dari `trial_ends_at` yang sudah diformat di server.
  * Itu sebabnya me-refresh halaman ini memberi jawaban yang sama persis.
