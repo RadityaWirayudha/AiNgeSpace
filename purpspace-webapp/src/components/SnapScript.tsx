@@ -22,8 +22,11 @@ import Script from "next/script"
 
 export function SnapScript() {
   // URL berbeda antara Sandbox dan Production.
+  // Pakai MIDTRANS_IS_PRODUCTION, BUKAN NODE_ENV — Cloudflare Workers selalu
+  // NODE_ENV="production" sehingga pakai NODE_ENV akan memuat snap.js Production
+  // bahkan ketika key-nya masih Sandbox, lalu transaksi gagal diam-diam.
   const snapUrl =
-    process.env.NODE_ENV === "production"
+    process.env.MIDTRANS_IS_PRODUCTION === "true"
       ? "https://app.midtrans.com/snap/snap.js"
       : "https://app.sandbox.midtrans.com/snap/snap.js"
 
