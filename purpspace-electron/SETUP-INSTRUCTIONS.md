@@ -12,19 +12,75 @@ Dokumen ini berisi langkah-langkah manual yang harus dilakukan di Clerk Dashboar
 
 ---
 
-## Step 1: Configure Supabase untuk Clerk Third-Party Auth
+## Step 1: Hubungkan Clerk ↔ Supabase (Third-Party Auth)
 
-**Lokasi:** Supabase Dashboard → Authentication → Third-party Auth
+> **Catatan:** Fitur ini tidak muncul di sidebar Supabase — harus akses via **URL langsung**.
 
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard)
-2. Pilih project `ucneqextloynzymzxygi`
-3. Sidebar: **Authentication** → **Third-party Auth**
-4. Klik **Add Provider** → cari **Clerk**
-5. Masukkan **Clerk Domain**: `new-bluegill-38.clerk.accounts.dev` (atau domain Clerk instance lu yang sekarang aktif)
-   - Domain ini bisa dicek di Clerk Dashboard → Settings → General
-6. Klik **Save**
+### 1a. Aktifkan integrasi di sisi Clerk
 
-**What happens:** Supabase sekarang akan verifikasi Clerk session JWTs menggunakan Clerk's JWKS endpoint (`https://<clerk-domain>/.well-known/jwks.json`). Tidak perlu JWT template lagi — native integration sudah handle semua.
+1. Buka: **https://dashboard.clerk.com/setup/supabase**
+2. Pilih aplikasi PurpSpace-mu
+3. Klik **Connect** / **Enable**
+
+Ini otomatis menambahkan `"role": "authenticated"` ke semua session token Clerk-mu. Tidak ada yang perlu disimpan dari halaman ini.
+
+### 1b. Tambahkan Clerk sebagai Third-Party Auth di Supabase
+
+Buka URL ini **langsung** di browser (jangan cari lewat sidebar):
+
+```
+https://supabase.com/dashboard/project/ucneqextloynzymzxygi/auth/third-party
+```
+
+1. Klik **Add provider** → pilih **Clerk**
+2. Isi field **Clerk Domain**
+
+   Cara cari Clerk Domain kamu:
+   - Buka [Clerk Dashboard](https://dashboard.clerk.com) → pilih project
+   - Kiri: **Configure** → **Domains**
+   - Copy domain yang muncul, formatnya: `xxxxx.clerk.accounts.dev`
+
+   Contoh: `new-bluegill-38.clerk.accounts.dev`
+
+3. Klik **Save**
+
+**Verifikasi:** Halaman seharusnya tampil provider Clerk dengan status aktif.
+
+---
+
+> **Jika URL di atas menampilkan 404 atau error:**  
+> Supabase project-mu mungkin belum support Third-Party Auth. Gunakan fallback di bawah.
+
+<details>
+<summary>⚠️ Fallback: JWT Template (jika Third-Party Auth tidak tersedia)</summary>
+
+Ini pendekatan lama (deprecated April 2025 tapi masih fungsional).
+
+**1. Dapatkan Supabase JWT Secret**
+
+Buka URL ini (bukan "Integrations" — itu halaman berbeda):
+```
+https://supabase.com/dashboard/project/ucneqextloynzymzxygi/settings/api
+```
+Scroll ke bagian **JWT Settings** → copy **JWT Secret**.
+
+**2. Buat JWT Template di Clerk**
+- Clerk Dashboard → Configure → JWT Templates → New template → Blank
+- Name: `supabase`
+- Signing algorithm: `HS256`
+- Signing key: paste JWT Secret dari step 1
+- Claims: `{ "role": "authenticated" }`
+- Save
+
+**3. Update kode** `src/lib/supabase/server.ts` baris `accessToken`:
+```ts
+// Ganti:
+accessToken: () => getToken(),
+// Jadi:
+accessToken: () => getToken({ template: "supabase" }),
+```
+
+</details>
 
 ---
 
@@ -151,11 +207,12 @@ npm run build:desktop
 ## Common Issues
 
 ### Issue 1: API calls return 401 Unauthorized
-**Cause:** Clerk session JWT tidak valid atau Supabase belum configured untuk verify Clerk JWTs.
+**Cause:** JWT Template belum di-setup, atau nama template bukan `supabase`, atau signing key salah.
 
 **Fix:**
-1. Check Clerk domain di Supabase → Authentication → Third-party Auth
-2. Verify domain exact match dengan Clerk dashboard
+1. Clerk Dashboard → Configure → JWT Templates → pastikan template bernama persis `supabase`
+2. Pastikan signing key = Supabase JWT Secret (Project Settings → Data API → JWT Secret)
+3. Pastikan claim `role: "authenticated"` ada di template
 
 ### Issue 2: RLS policies tidak apply, user bisa lihat data user lain
 **Cause:** RLS policies belum di-run, atau ada typo di `clerk_user_id` column name.

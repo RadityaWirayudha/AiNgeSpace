@@ -49,82 +49,48 @@ AiNgeSpace/
 
 ---
 
-## ⚠️ BLOCKER: Konfigurasi Supabase ↔ Clerk
+## ✅ BLOCKER: Konfigurasi Supabase ↔ Clerk
 
-### Masalah
+### Status Kode (sudah benar, tidak perlu ubah)
 
-`createAuthedClient()` mengirim Clerk JWT ke Supabase via header `Authorization: Bearer <token>`. Supabase perlu bisa **memverifikasi** JWT ini agar RLS policies (`auth.jwt()->>'sub'`) bisa berjalan.
+`server.ts` sekarang pakai `accessToken: () => getToken()` — cara resmi post-April 2025.  
+Typecheck passed ✅
 
-Kode saat ini menggunakan `getToken()` tanpa template — ini mengasumsikan Supabase dikonfigurasi dengan "Native Third-party Auth" yang memverifikasi via Clerk JWKS endpoint.
+### Yang Masih Perlu Dikerjakan di Dashboard
 
-**Tapi fitur "Third-party Auth" tidak ditemukan di sidebar Supabase Dashboard** (sudah dicek di `supabase.com/dashboard/project/ucneqextloynzymzxygi/auth/`).
+#### Langkah 1 — Clerk (2 menit)
 
-### Solusi A — JWT Template (DIREKOMENDASIKAN, tidak butuh fitur UI yang hilang)
+Buka: **https://dashboard.clerk.com/setup/supabase**  
+Pilih project PurpSpace → klik **Connect** / **Enable**.  
+Ini otomatis menambahkan `"role": "authenticated"` ke semua session token.
 
-**Step 1: Dapatkan Supabase JWT Secret**
+#### Langkah 2 — Supabase Third-Party Auth (2 menit)
+
+Fitur ini **tidak muncul di sidebar** — akses via URL langsung:
+
 ```
-Supabase Dashboard → Project Settings → Data API → JWT Secret → Copy
-```
-(Project ID: `ucneqextloynzymzxygi`)
-
-**Step 2: Buat JWT Template di Clerk**
-```
-Clerk Dashboard → Configure → JWT Templates → + New template
-  Name: supabase
-  Signing algorithm: HS256
-  Signing key: (paste JWT Secret dari Step 1)
-  Claims:
-    {
-      "role": "authenticated"
-    }
-  (claim "sub" otomatis diisi Clerk user ID — tidak perlu ditambah)
-→ Save
+https://supabase.com/dashboard/project/ucneqextloynzymzxygi/auth/third-party
 ```
 
-**Step 3: Update satu baris kode**
+1. Klik **Add provider** → pilih **Clerk**
+2. Isi **Clerk Domain**: cek di Clerk Dashboard → Configure → Domains  
+   Format: `xxxxx.clerk.accounts.dev`
+3. Klik **Save**
 
-File: `purpspace-electron/src/lib/supabase/server.ts`, baris 37:
-```ts
-// SEKARANG:
-const token = await getToken()
+#### Langkah 3 — Jalankan RLS SQL
 
-// GANTI JADI:
-const token = await getToken({ template: 'supabase' })
-```
-Update juga komentar di atas baris itu agar sesuai (opsional tapi bagus).
-
-**Step 4: Jalankan RLS SQL**
 ```
 Supabase Dashboard → SQL Editor → New query
-→ Copy-paste isi file: purpspace-electron/supabase/rls-policies.sql
-→ Run
+→ Paste isi: purpspace-electron/supabase/rls-policies.sql → Run
 ```
 
-**Step 5: Hapus service role key dari .env.local desktop**
+#### Langkah 4 — Hapus service role key
 
-File: `%APPDATA%\PurpSpace\.env.local`  
-Hapus atau comment-out baris:
-```
-SUPABASE_SERVICE_ROLE_KEY=...
-```
+File `%APPDATA%\PurpSpace\.env.local` → hapus baris `SUPABASE_SERVICE_ROLE_KEY=...`
 
 ---
 
-### Solusi B — Native OIDC (jika Third-party Auth UI tersedia)
-
-Coba buka URL ini langsung:
-```
-https://supabase.com/dashboard/project/ucneqextloynzymzxygi/auth/third-party-auth
-```
-
-Jika halaman terbuka (bukan 404):
-1. Add provider → Clerk
-2. Domain: domain Clerk project ini
-3. Save
-4. **Tidak perlu ubah kode apapun** — `getToken()` tanpa template sudah benar
-5. Tetap jalankan RLS SQL (Step 4 di Solusi A)
-
-Jika URL 404, pakai Solusi A.
+> **Jika URL Third-Party Auth 404:** Gunakan JWT Template fallback — lihat `SETUP-INSTRUCTIONS.md` Step 1 (ada collapse "Fallback" di sana, detail lengkap).
 
 ---
 
