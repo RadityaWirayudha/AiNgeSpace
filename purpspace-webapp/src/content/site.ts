@@ -29,6 +29,11 @@ export const DOWNLOAD_META = {
 }
 
 /**
+ * URL publik website — satu sumber, ganti ke custom domain kalau sudah punya.
+ */
+export const WEBSITE_URL = "https://app.purpspace.workers.dev"
+
+/**
  * Email kontak bisnis yang tampil di footer dan halaman Syarat & Ketentuan.
  * TODO: Ganti dengan email bisnis aktif kamu (bisa Gmail biasa).
  */

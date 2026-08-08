@@ -11,7 +11,7 @@ import type { Metadata } from "next"
 import { SiteFooter } from "@/components/site/SiteFooter"
 import { SiteHeader } from "@/components/site/SiteHeader"
 import { PLANS } from "@/content/plans"
-import { CONTACT_EMAIL } from "@/content/site"
+import { CONTACT_EMAIL, WEBSITE_URL } from "@/content/site"
 
 export const metadata: Metadata = {
   title: "Syarat & Ketentuan — PurpSpace",
@@ -215,13 +215,13 @@ export default function SyaratKetentuanPage() {
                 {CONTACT_EMAIL}
               </a>
             </p>
-            <p className="mt-1 text-[15px] text-[var(--bm-text-secondary)]">
+            <p className="mt-3 text-[15px] text-[var(--bm-text-secondary)]">
               <strong className="text-[var(--bm-text)]">Website:</strong>{" "}
               <a
-                href="https://purpspace-webapp.purpspace.workers.dev"
+                href={WEBSITE_URL}
                 className="text-[var(--color-purple-light)] hover:underline"
               >
-                purpspace-webapp.purpspace.workers.dev
+                {WEBSITE_URL.replace("https://", "")}
               </a>
             </p>
           </section>
