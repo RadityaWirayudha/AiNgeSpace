@@ -27,3 +27,9 @@ export const DOWNLOAD_META = {
   arch: "x64",
   version: `v${VERSI}`,
 }
+
+/**
+ * Email kontak bisnis yang tampil di footer dan halaman Syarat & Ketentuan.
+ * TODO: Ganti dengan email bisnis aktif kamu (bisa Gmail biasa).
+ */
+export const CONTACT_EMAIL = "purpspaceai@gmail.com"
